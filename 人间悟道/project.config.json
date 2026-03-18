@@ -1,0 +1,15 @@
+{
+    "setting": {
+        "urlCheck": true,
+        "es6": true,
+        "postcss": true,
+        "minified": true,
+        "newFeature": true,
+        "autoCompile": true,
+        "compileHotReLoad": true,
+        "nativeCompile": true
+    },
+    "appid": "tte37d95c07d1c720902",
+    "projectname": "人间悟道",
+    "douyinProjectType": "native"
+}
