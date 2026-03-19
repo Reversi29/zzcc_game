@@ -6,6 +6,11 @@ function saveState() {
       bgOffset: state.bgOffset,
       chatBoxExpanded: state.chatBoxExpanded,
       inChatMode: state.inChatMode,
+      selectedRole: state.selectedRole,
+      playerId: state.playerId,
+      nickname: state.nickname,
+      friends: state.friends,
+      messages: state.messages,
     });
   } catch (err) {
     // 存档失败
@@ -19,6 +24,11 @@ function loadState() {
       state.bgOffset = data.bgOffset ?? state.bgOffset;
       state.chatBoxExpanded = data.chatBoxExpanded ?? state.chatBoxExpanded;
       state.inChatMode = data.inChatMode ?? state.inChatMode;
+      state.selectedRole = data.selectedRole ?? state.selectedRole;
+      state.playerId = data.playerId ?? state.playerId;
+      state.nickname = data.nickname ?? state.nickname;
+      state.friends = data.friends ?? [];
+      state.messages = data.messages ?? {};
     }
   } catch (err) {
     // 读取存档失败

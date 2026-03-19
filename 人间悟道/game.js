@@ -125,6 +125,72 @@ function gameLoop() {
       clickedOnSomething = true;
     }
 
+    // 检查角色选择按钮点击
+    if (uiState.roleButtons && uiState.roleButtons.length > 0) {
+      for (const roleBtn of uiState.roleButtons) {
+        if (isPointInRect(inputState.lastTapX, inputState.lastTapY, roleBtn)) {
+          state.selectedRole = roleBtn.roleId;
+          clickedOnSomething = true;
+          break;
+        }
+      }
+    }
+
+    // 检查好友按钮点击
+    if (uiState.friendButtons && uiState.friendButtons.length > 0) {
+      for (const friendBtn of uiState.friendButtons) {
+        if (isPointInRect(inputState.lastTapX, inputState.lastTapY, friendBtn)) {
+          state.selectedFriend = friendBtn.playerId;
+          // 初始化消息数组
+          if (!state.messages[friendBtn.playerId]) {
+            state.messages[friendBtn.playerId] = [];
+          }
+          clickedOnSomething = true;
+          break;
+        }
+      }
+    }
+
+    // 检查操作按钮（返回、发送、添加好友等）
+    if (uiState.actionButtons && uiState.actionButtons.length > 0) {
+      for (const actionBtn of uiState.actionButtons) {
+        if (isPointInRect(inputState.lastTapX, inputState.lastTapY, actionBtn)) {
+          if (actionBtn.action === 'back') {
+            state.selectedFriend = null;
+          } else if (actionBtn.action === 'send') {
+            // 发送测试消息
+            if (state.selectedFriend && state.playerId) {
+              const testMsg = {
+                from: state.playerId,
+                to: state.selectedFriend,
+                content: '你好！',
+                createdAt: new Date().toISOString()
+              };
+              if (!state.messages[state.selectedFriend]) {
+                state.messages[state.selectedFriend] = [];
+              }
+              state.messages[state.selectedFriend].push(testMsg);
+            }
+          } else if (actionBtn.action === 'addFriend') {
+            // TODO: 打开添加好友输入框
+            tt.showModal({
+              title: '添加好友',
+              placeholderText: '输入玩家ID',
+              confirmText: '添加',
+              cancelText: '取消',
+              success: (res) => {
+                if (res.confirm) {
+                  console.log('添加好友:', res.value);
+                }
+              }
+            });
+          }
+          clickedOnSomething = true;
+          break;
+        }
+      }
+    }
+
     if (uiState.optionButtons) {
       for (const button of uiState.optionButtons) {
         if (isPointInRect(inputState.lastTapX, inputState.lastTapY, button)) {

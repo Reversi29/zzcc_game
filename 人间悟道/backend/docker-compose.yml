@@ -1,19 +1,35 @@
+version: '3.8'
+
 services:
   app:
     build: .
+    container_name: renjian-wudao-backend
     ports:
       - "3000:3000"
     depends_on:
       - mongo
     environment:
       - NODE_ENV=production
+      - MONGO_URI=mongodb://mongo:27017/renjian-wudao
+      - PORT=3000
+    restart: unless-stopped
+    networks:
+      - app-network
 
   mongo:
     image: mongo:5.0
+    container_name: renjian-wudao-mongo
     ports:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
+    restart: unless-stopped
+    networks:
+      - app-network
 
 volumes:
   mongo-data:
+
+networks:
+  app-network:
+    driver: bridge
