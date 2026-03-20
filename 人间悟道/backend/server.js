@@ -30,14 +30,29 @@ mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
 // 用户模型
 const UserSchema = new mongoose.Schema({
   playerId: { type: String, required: true, unique: true },
+  uid: { type: Number, unique: true }, // 自定义UID（6位数字）
   nickname: { type: String, default: '无名修士' },
   avatar: { type: Number, default: 1 }, // 角色ID
+  avatarFrame: { type: Number, default: 0 }, // 头像框
   level: { type: Number, default: 1 },
   cultivation: { type: Number, default: 0 }, // 修为
+  bio: { type: String, default: '' }, // 简介
+  birthday: { type: String, default: '' }, // 生日 MM-DD
   createdAt: { type: Date, default: Date.now },
   lastLogin: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', UserSchema);
+
+// UID计数器
+let uidCounter = 100000; // 起始UID
+
+async function generateUID() {
+  const lastUser = await User.findOne().sort({ uid: -1 });
+  if (lastUser && lastUser.uid) {
+    uidCounter = lastUser.uid + 1;
+  }
+  return uidCounter;
+}
 
 // 好友模型
 const FriendSchema = new mongoose.Schema({
@@ -94,7 +109,35 @@ app.post('/api/users/register', async (req, res) => {
       return res.json(user); // 已存在则返回
     }
     
-    user = new User({ playerId, nickname: nickname || '无名修士' });
+    // 生成UID
+    const uid = await generateUID();
+    user = new User({ 
+      playerId, 
+      nickname: nickname || '无名修士',
+      uid: uid
+    });
+    await user.save();
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 根据UID注册/登录
+app.post('/api/users/register-by-uid', async (req, res) => {
+  try {
+    const { uid, nickname } = req.body;
+    if (!uid) {
+      return res.status(400).json({ error: 'uid is required' });
+    }
+    
+    let user = await User.findOne({ uid: parseInt(uid) });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found with this UID' });
+    }
+    
+    // 更新最后登录时间
+    user.lastLogin = Date.now();
     await user.save();
     res.json(user);
   } catch (err) {
@@ -136,16 +179,36 @@ app.get('/api/users/:playerId', async (req, res) => {
 // 更新用户信息
 app.put('/api/users/:playerId', async (req, res) => {
   try {
-    const { nickname, avatar, level, cultivation } = req.body;
+    const { nickname, avatar, avatarFrame, level, cultivation, bio, birthday } = req.body;
     const user = await User.findOneAndUpdate(
       { playerId: req.params.playerId },
-      { nickname, avatar, level, cultivation },
+      { nickname, avatar, avatarFrame, level, cultivation, bio, birthday },
       { new: true }
     );
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
     res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 根据UID获取用户信息
+app.get('/api/users-uid/:uid', async (req, res) => {
+  try {
+    const user = await User.findOne({ uid: parseInt(req.params.uid) });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({
+      playerId: user.playerId,
+      uid: user.uid,
+      nickname: user.nickname,
+      avatar: user.avatar,
+      level: user.level,
+      bio: user.bio
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

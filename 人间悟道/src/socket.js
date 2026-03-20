@@ -2,13 +2,11 @@
 const { state } = require("./state");
 
 let socket = null;
-let messageCallback = null;
-let statusCallback = null;
 
-const SocketIO = {
+const SocketManager = {
   // 初始化连接
   connect() {
-    if (socket) return;
+    if (socket && socket.open) return;
     
     try {
       socket = tt.connectSocket({
@@ -17,10 +15,10 @@ const SocketIO = {
       
       socket.onOpen(() => {
         console.log('WebSocket connected');
+        state.connected = true;
         if (state.playerId) {
           this.login(state.playerId);
         }
-        if (statusCallback) statusCallback(true);
       });
       
       socket.onMessage((res) => {
@@ -29,36 +27,48 @@ const SocketIO = {
           console.log('WebSocket message:', data);
           
           // 处理新消息
-          if (data.type === 'newMessage' || data.event === 'newMessage') {
-            const msg = data.message || data;
-            if (messageCallback) {
-              messageCallback(msg);
+          if (data.event === 'newMessage') {
+            const msg = data.message;
+            if (!state.messages[msg.from]) {
+              state.messages[msg.from] = [];
             }
+            state.messages[msg.from].push({
+              from: msg.from,
+              to: msg.to,
+              content: msg.content,
+              createdAt: msg.createdAt
+            });
           }
           
-          // 用户上线/下线通知
-          if (data.event === 'userOnline' || data.event === 'userOffline') {
-            // 更新好友在线状态
-            state.friends = state.friends.map(f => ({
-              ...f,
-              online: data.event === 'userOnline' ? true : false
-            }));
+          // 用户上线/下线
+          if (data.event === 'userOnline') {
+            const playerId = data.playerId;
+            state.friends = state.friends.map(f => 
+              f.playerId === playerId ? { ...f, online: true } : f
+            );
+          }
+          if (data.event === 'userOffline') {
+            const playerId = data.playerId;
+            state.friends = state.friends.map(f => 
+              f.playerId === playerId ? { ...f, online: false } : f
+            );
           }
         } catch (e) {
-          console.log('Raw message:', res.data);
+          console.log('Raw WS message:', res.data);
         }
       });
       
       socket.onClose(() => {
         console.log('WebSocket closed');
+        state.connected = false;
         socket = null;
-        if (statusCallback) statusCallback(false);
-        // 自动重连
-        setTimeout(() => this.connect(), 3000);
+        // 30秒后重连
+        setTimeout(() => this.connect(), 30000);
       });
       
       socket.onError((err) => {
         console.error('WebSocket error:', err);
+        state.connected = false;
       });
       
     } catch (err) {
@@ -72,7 +82,7 @@ const SocketIO = {
       socket.send({
         data: JSON.stringify({
           event: 'login',
-          playerId
+          playerId: playerId
         })
       });
     }
@@ -84,9 +94,9 @@ const SocketIO = {
       socket.send({
         data: JSON.stringify({
           event: 'sendMessage',
-          from,
-          to,
-          content
+          from: from,
+          to: to,
+          content: content
         })
       });
       return true;
@@ -94,53 +104,12 @@ const SocketIO = {
     return false;
   },
   
-  // 设置消息回调
-  onMessage(callback) {
-    messageCallback = callback;
-  },
-  
-  // 设置连接状态回调
-  onStatusChange(callback) {
-    statusCallback = callback;
-  },
-  
-  // 断开连接
-  disconnect() {
-    if (socket) {
-      socket.close();
-      socket = null;
-    }
-  },
-  
-  // 检查是否连接
+  // 检查连接状态
   isConnected() {
     return socket && socket.open;
   }
 };
 
-// 模拟 Socket.IO 的 JSON 消息格式
-// 抖音小游戏的 WebSocket API 比较基础，这里用模拟方式
-const MockSocketIO = {
-  connect() {
-    console.log('MockSocketIO: Using HTTP polling instead of WebSocket');
-  },
-  
-  login(playerId) {
-    console.log('MockSocketIO: login', playerId);
-  },
-  
-  sendMessage(from, to, content) {
-    // 通过 HTTP API 发送消息
-    return false;
-  },
-  
-  onMessage(callback) {},
-  onStatusChange(callback) {},
-  disconnect() {},
-  isConnected() { return false; }
-};
-
 module.exports = {
-  // 使用 MockSocketIO 作为后备
-  socketIO: MockSocketIO
+  SocketManager
 };
