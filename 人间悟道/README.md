@@ -248,15 +248,27 @@ docker-compose down
 | 接口 | 方法 | 说明 |
 |-----|------|------|
 | `/` | GET | API 信息 |
-| `/api/users/register` | POST | 用户注册 |
+| `/api/users/register` | POST | 用户注册（自动分配UID） |
 | `/api/users/login` | POST | 用户登录 |
 | `/api/users/:playerId` | GET | 获取用户信息 |
 | `/api/users/:playerId` | PUT | 更新用户信息 |
-| `/api/friends/:playerId` | GET | 获取好友列表 |
+| `/api/users-uid/:uid` | GET | 根据UID获取用户信息 |
+| `/api/friends/:playerId` | GET | 获取好友列表（含在线状态） |
 | `/api/friends` | POST | 添加好友 |
 | `/api/friends/:playerId/:friendId` | DELETE | 删除好友 |
 | `/api/messages/:playerId/:friendId` | GET | 获取聊天记录 |
-| `/api/players` | GET | 搜索玩家 |
+| `/api/messages/unread/:playerId` | GET | 获取未读消息数 |
+| `/api/players` | GET | 搜索玩家（支持UID/昵称） |
+
+### WebSocket 事件
+
+| 事件 | 方向 | 说明 |
+|-----|------|------|
+| `login` | 发送 | 用户登录 `{ playerId }` |
+| `sendMessage` | 发送 | 发送消息 `{ from, to, content }` |
+| `newMessage` | 接收 | 收到新消息 |
+| `userOnline` | 接收 | 好友上线通知 |
+| `userOffline` | 接收 | 好友下线通知 |
 
 ### 前端配置
 
@@ -268,11 +280,18 @@ apiBase: 'http://your-server-ip:3000', // 后端API地址
 
 ### 功能说明
 
-1. **UID分配**：首次启动自动注册，自动分配6位数字UID
-2. **头像系统**：点击左上角头像查看/编辑个人资料
-3. **头像框**：4种头像框（金、银、紫、无）
-4. **好友系统**：搜索UID或昵称添加好友
-5. **实时聊天**：WebSocket实时消息推送
+1. **UID分配**：首次启动自动注册，自动分配6位数字UID（100000起）
+2. **用户信息**：昵称、简介、生日、等级、修为
+3. **头像系统**：圆形纯色头像，显示昵称首字
+4. **头像框**：4种头像框（金、银、紫、无）
+5. **好友系统**：
+   - 输入UID（纯数字）精确搜索
+   - 输入昵称模糊搜索
+   - 实时显示好友在线状态
+6. **实时聊天**：
+   - WebSocket实时消息推送
+   - 消息本地存储
+   - 支持文字消息
 
 ### 生产环境建议
 

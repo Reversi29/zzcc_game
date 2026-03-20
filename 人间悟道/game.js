@@ -41,6 +41,7 @@ function initPlayerId() {
 // 注册到后端服务器
 async function registerToServer() {
   try {
+    console.log('正在注册到服务器:', state.apiBase);
     const res = await tt.request({
       url: state.apiBase + '/api/users/register',
       method: 'POST',
@@ -50,6 +51,7 @@ async function registerToServer() {
         nickname: state.nickname
       }
     });
+    console.log('注册响应:', res);
     if (res.data) {
       state.uid = res.data.uid;
       state.nickname = res.data.nickname || state.nickname;
@@ -58,13 +60,27 @@ async function registerToServer() {
       state.cultivation = res.data.cultivation || 0;
       state.bio = res.data.bio || '';
       state.birthday = res.data.birthday || '';
-      console.log('注册成功:', res.data);
+      console.log('注册成功, UID:', state.uid);
       saveState();
-      // 注册成功后加载好友
       loadFriends();
+    } else {
+      // 后端没有返回数据，使用本地UID
+      generateLocalUID();
     }
   } catch (err) {
-    console.log('注册失败，使用本地模式');
+    console.log('注册失败:', err);
+    // 后端不可用，使用本地生成的UID
+    generateLocalUID();
+  }
+}
+
+// 本地生成临时UID（当后端不可用时）
+function generateLocalUID() {
+  if (!state.uid) {
+    // 生成一个基于时间的临时UID（100000-999999范围）
+    state.uid = 100000 + Math.floor(Math.random() * 899999);
+    console.log('使用本地临时UID:', state.uid);
+    saveState();
   }
 }
 
@@ -91,8 +107,11 @@ async function loadFriends() {
 
 function connectWebSocket() {
   try {
+    const wsUrl = state.apiBase.replace('http://', 'ws://').replace('https://', 'wss://');
+    console.log('Connecting WebSocket:', wsUrl);
+    
     socket = tt.connectSocket({
-      url: 'ws://' + (state.apiBase.replace('http://', ''))
+      url: wsUrl
     });
     
     socket.onOpen(() => {
@@ -107,25 +126,45 @@ function connectWebSocket() {
     socket.onMessage((res) => {
       try {
         const data = JSON.parse(res.data);
+        console.log('WebSocket message:', data);
+        
         if (data.event === 'newMessage' || data.type === 'newMessage') {
           const msg = data.message || data;
           handleNewMessage(msg);
+        } else if (data.event === 'messageSent') {
+          // 消息发送确认
+          console.log('Message sent confirmed');
+        } else if (data.event === 'userOnline') {
+          // 好友上线
+          const playerId = data.playerId;
+          state.friends = state.friends.map(f => 
+            f.playerId === playerId ? { ...f, online: true } : f
+          );
+        } else if (data.event === 'userOffline') {
+          // 好友下线
+          const playerId = data.playerId;
+          state.friends = state.friends.map(f => 
+            f.playerId === playerId ? { ...f, online: false } : f
+          );
         }
-      } catch (e) {}
+      } catch (e) {
+        console.log('WebSocket message parse error:', e);
+      }
     });
     
     socket.onClose(() => {
       console.log('WebSocket closed');
       state.connected = false;
       // 自动重连
-      setTimeout(connectWebSocket, 3000);
+      setTimeout(connectWebSocket, 5000);
     });
     
     socket.onError((err) => {
-      console.log('WebSocket error');
+      console.log('WebSocket error:', err);
+      state.connected = false;
     });
   } catch (err) {
-    console.log('无法连接WebSocket');
+    console.log('无法连接WebSocket:', err);
   }
 }
 
@@ -142,6 +181,7 @@ function handleNewMessage(msg) {
     // 消息已经在列表中
   }
 }
+}
 
 // 发送消息
 function sendMessage(content) {
@@ -150,7 +190,7 @@ function sendMessage(content) {
   const msg = {
     from: state.playerId,
     to: state.selectedFriend,
-    content: content,
+    content: content.trim(),
     createdAt: new Date().toISOString()
   };
   
@@ -161,8 +201,22 @@ function sendMessage(content) {
   state.messages[state.selectedFriend].push(msg);
   
   // 发送到服务器
-  if (socket && socket.open) {
-    socket.send({ data: JSON.stringify({ event: 'sendMessage', ...msg }) });
+  if (socket) {
+    try {
+      socket.send({ 
+        data: JSON.stringify({ 
+          event: 'sendMessage', 
+          from: msg.from,
+          to: msg.to,
+          content: msg.content
+        }) 
+      });
+      console.log('Message sent via WebSocket');
+    } catch (err) {
+      console.log('Failed to send message:', err);
+    }
+  } else {
+    console.log('WebSocket not connected');
   }
 }
 
@@ -253,163 +307,173 @@ function gameLoop() {
 
   // 点击交互
   if (!inputState.isPressing && !inputState.isDragging && uiState && inputState.lastTapX >= 0) {
-    let clickedOnSomething = false;
+    const x = inputState.lastTapX;
+    const y = inputState.lastTapY;
+    let handled = false;
 
-    // ====== 头像点击（打开用户信息面板）======
-    if (uiState.avatarBtn && isPointInRect(inputState.lastTapX, inputState.lastTapY, uiState.avatarBtn)) {
+    // 1. 头像点击
+    if (uiState.avatarBtn && isPointInRect(x, y, uiState.avatarBtn)) {
       state.showProfile = true;
       state.selectedTabWindow = null;
-      clickedOnSomething = true;
+      handled = true;
     }
-    
-    // ====== 个人信息面板按钮 ======
-    else if (state.showProfile && uiState.profileButtons && uiState.profileButtons.length > 0) {
+
+    // 2. 个人信息面板按钮
+    if (!handled && state.showProfile && uiState.profileButtons) {
       for (const btn of uiState.profileButtons) {
-        if (isPointInRect(inputState.lastTapX, inputState.lastTapY, btn)) {
+        if (isPointInRect(x, y, btn)) {
           if (btn.action === 'close') {
             state.showProfile = false;
-          } else if (btn.action === 'edit') {
-            showInputDialog('修改昵称', '请输入昵称', (value) => {
-              state.nickname = value;
-              saveState();
-            });
           } else if (btn.action === 'changeAvatar') {
-            const currentIdx = state.roleList.indexOf(state.avatar || state.selectedRole);
-            const nextIdx = (currentIdx + 1) % state.roleList.length;
-            state.avatar = state.roleList[nextIdx];
+            const idx = state.roleList.indexOf(state.avatar || state.selectedRole);
+            state.avatar = state.roleList[(idx + 1) % state.roleList.length];
             saveState();
           } else if (btn.action === 'changeFrame') {
-            state.avatarFrame = (state.avatarFrame + 1) % 4;
+            state.avatarFrame = ((state.avatarFrame || 0) + 1) % 4;
             saveState();
           } else if (btn.action === 'changeNickname') {
-            showInputDialog('修改昵称', '请输入新昵称', (value) => {
-              state.nickname = value;
-              saveState();
-            });
+            showInputDialog('修改昵称', '请输入新昵称', (v) => { state.nickname = v; saveState(); });
           } else if (btn.action === 'changeBio') {
-            showInputDialog('修改简介', '介绍一下自己', (value) => {
-              state.bio = value;
-              saveState();
-            });
+            showInputDialog('修改简介', '介绍一下自己', (v) => { state.bio = v; saveState(); });
           }
-          clickedOnSomething = true;
-          break;
-        }
-      }
-    }
-    
-    // ====== 聊天输入框 ======
-    else if (uiState.inputAreas && uiState.inputAreas.length > 0) {
-      for (const inputArea of uiState.inputAreas) {
-        if (isPointInRect(inputState.lastTapX, inputState.lastTapY, inputArea)) {
-          if (inputArea.type === 'chat') {
-            showInputDialog('发送消息', '输入消息内容', (value) => {
-              sendMessage(value);
-            });
-          }
-          clickedOnSomething = true;
+          handled = true;
           break;
         }
       }
     }
 
-    // ====== 窗口内点击 ======
-    else if (uiState.tabWindow && isPointInRect(inputState.lastTapX, inputState.lastTapY, uiState.tabWindow)) {
-      clickedOnSomething = true;
-    } else if (state.selectedTabWindow) {
-      state.selectedTabWindow = null;
-    }
-
-    // ====== 居中按钮 ======
-    else if (uiState.centerButton && isPointInRect(inputState.lastTapX, inputState.lastTapY, uiState.centerButton)) {
-      state.bgOffset = 0;
-      clickedOnSomething = true;
-    }
-
-    // ====== 角色选择 ======
-    else if (uiState.roleButtons && uiState.roleButtons.length > 0) {
-      for (const roleBtn of uiState.roleButtons) {
-        if (isPointInRect(inputState.lastTapX, inputState.lastTapY, roleBtn)) {
-          state.avatar = roleBtn.roleId;
-          state.selectedRole = roleBtn.roleId;
-          clickedOnSomething = true;
+    // 3. 聊天输入框
+    if (!handled && uiState.inputAreas) {
+      for (const area of uiState.inputAreas) {
+        if (isPointInRect(x, y, area) && area.type === 'chat') {
+          showInputDialog('发送消息', '输入消息', (v) => sendMessage(v));
+          handled = true;
           break;
         }
       }
     }
 
-    // ====== 好友列表 ======
-    else if (uiState.friendButtons && uiState.friendButtons.length > 0) {
-      for (const friendBtn of uiState.friendButtons) {
-        if (isPointInRect(inputState.lastTapX, inputState.lastTapY, friendBtn)) {
-          state.selectedFriend = friendBtn.playerId;
-          if (!state.messages[friendBtn.playerId]) {
-            state.messages[friendBtn.playerId] = [];
-          }
-          clickedOnSomething = true;
-          break;
-        }
-      }
-    }
-
-    // ====== 操作按钮 ======
-    else if (uiState.actionButtons && uiState.actionButtons.length > 0) {
-      for (const actionBtn of uiState.actionButtons) {
-        if (isPointInRect(inputState.lastTapX, inputState.lastTapY, actionBtn)) {
-          if (actionBtn.action === 'close') {
+    // 4. 弹窗内按钮 (actionButtons)
+    if (!handled && uiState.actionButtons) {
+      for (const btn of uiState.actionButtons) {
+        if (isPointInRect(x, y, btn)) {
+          if (btn.action === 'close') {
             state.selectedTabWindow = null;
             state.showProfile = false;
-          } else if (actionBtn.action === 'back') {
+          } else if (btn.action === 'back') {
             state.selectedFriend = null;
-          } else if (actionBtn.action === 'send') {
-            showInputDialog('发送消息', '输入消息', (value) => {
-              sendMessage(value);
-            });
-          } else if (actionBtn.action === 'addFriend') {
-            showInputDialog('添加好友', '输入玩家UID或昵称', async (value) => {
+          } else if (btn.action === 'send') {
+            showInputDialog('发送消息', '输入消息', (v) => sendMessage(v));
+          } else if (btn.action === 'addFriend') {
+            showInputDialog('添加好友', '输入玩家UID或昵称', async (v) => {
+              if (!v || !v.trim()) {
+                tt.showToast({ title: '请输入UID或昵称' });
+                return;
+              }
               try {
-                const res = await tt.request({
-                  url: state.apiBase + '/api/players?q=' + encodeURIComponent(value),
-                  method: 'GET'
-                });
+                // 判断是纯数字（UID）还是昵称
+                const isUID = /^\d+$/.test(v.trim());
+                let searchUrl;
+                if (isUID) {
+                  searchUrl = state.apiBase + '/api/players?uid=' + encodeURIComponent(v.trim());
+                } else {
+                  searchUrl = state.apiBase + '/api/players?nickname=' + encodeURIComponent(v.trim());
+                }
+                
+                const res = await tt.request({ url: searchUrl, method: 'GET' });
                 if (res.data && res.data.length > 0) {
-                  const player = res.data[0];
-                  await tt.request({
+                  // 找到玩家，添加好友
+                  const targetPlayer = res.data[0];
+                  if (targetPlayer.playerId === state.playerId) {
+                    tt.showToast({ title: '不能添加自己为好友' });
+                    return;
+                  }
+                  
+                  const addRes = await tt.request({
                     url: state.apiBase + '/api/friends',
                     method: 'POST',
                     header: { 'Content-Type': 'application/json' },
-                    data: { playerId: state.playerId, friendId: player.playerId }
+                    data: { playerId: state.playerId, friendId: targetPlayer.playerId }
                   });
-                  tt.showToast({ title: '添加成功!' });
-                  loadFriends();
+                  
+                  if (addRes.statusCode === 200 || addRes.statusCode === 201) {
+                    tt.showToast({ title: '添加成功!' });
+                    loadFriends();
+                  } else if (addRes.data && addRes.data.error) {
+                    tt.showToast({ title: addRes.data.error });
+                  }
                 } else {
                   tt.showToast({ title: '未找到玩家' });
                 }
               } catch (err) {
-                tt.showToast({ title: '添加失败: ' + err.message });
+                console.log('添加好友错误:', err);
+                tt.showToast({ title: '添加失败: ' + (err.message || '网络错误') });
               }
             });
           }
-          clickedOnSomething = true;
+          handled = true;
           break;
         }
       }
     }
 
-    // ====== 底部选项卡 ======
-    else if (uiState.optionButtons) {
-      for (const button of uiState.optionButtons) {
-        if (isPointInRect(inputState.lastTapX, inputState.lastTapY, button)) {
-          state.selectedTab = button.label;
-          state.selectedTabWindow = button.label;
+    // 5. 角色选择
+    if (!handled && uiState.roleButtons) {
+      for (const btn of uiState.roleButtons) {
+        if (isPointInRect(x, y, btn)) {
+          state.avatar = btn.roleId;
+          state.selectedRole = btn.roleId;
+          saveState();
+          handled = true;
+          break;
+        }
+      }
+    }
+
+    // 6. 好友列表
+    if (!handled && uiState.friendButtons) {
+      for (const btn of uiState.friendButtons) {
+        if (isPointInRect(x, y, btn)) {
+          state.selectedFriend = btn.playerId;
+          if (!state.messages[btn.playerId]) state.messages[btn.playerId] = [];
+          handled = true;
+          break;
+        }
+      }
+    }
+
+    // 7. 底部选项卡
+    if (!handled && uiState.optionButtons) {
+      for (const btn of uiState.optionButtons) {
+        if (isPointInRect(x, y, btn)) {
+          state.selectedTab = btn.label;
+          state.selectedTabWindow = btn.label;
           state.showProfile = false;
-          clickedOnSomething = true;
+          handled = true;
           break;
         }
       }
     }
 
-    // 重置点击位置
+    // 8. 居中按钮
+    if (!handled && uiState.centerButton && isPointInRect(x, y, uiState.centerButton)) {
+      state.bgOffset = 0;
+      handled = true;
+    }
+
+    // 9. 点击弹窗外关闭
+    if (!handled && state.selectedTabWindow && uiState.tabWindow) {
+      if (!isPointInRect(x, y, uiState.tabWindow)) {
+        state.selectedTabWindow = null;
+      }
+      handled = true;
+    }
+
+    if (!handled && state.showProfile) {
+      // 点击其他区域关闭个人资料（简化处理）
+      state.showProfile = false;
+    }
+
     inputState.lastTapX = -1;
     inputState.lastTapY = -1;
   }
@@ -436,8 +500,13 @@ function init() {
   loadState();
   state.bgOffset = 0;
   
-  // 初始化
+  // 初始化玩家ID（如果没有则生成并注册）
   initPlayerId();
+  
+  // 如果没有UID，尝试注册获取
+  if (!state.uid) {
+    registerToServer();
+  }
   
   // 连接WebSocket
   connectWebSocket();
@@ -451,6 +520,10 @@ function init() {
 tt.onShow(() => {
   loadState();
   lastTime = Date.now();
+  // 每次显示时检查是否需要注册
+  if (!state.uid && state.playerId) {
+    registerToServer();
+  }
   loadFriends();
 });
 

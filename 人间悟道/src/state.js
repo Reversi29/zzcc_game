@@ -6,7 +6,7 @@ const state = {
   playerId: null, // 玩家ID（用于后端同步）
   uid: null, // 6位数字UID
   nickname: '无名修士',
-  avatar: 1, // 当前角色/头像
+  avatar: 1, // 头像ID (1, 2, ...)
   avatarFrame: 0, // 头像框
   level: 1,
   cultivation: 0, // 修为
@@ -21,7 +21,7 @@ const state = {
   selectedTabWindow: null, // 当前打开的窗口标签
   showProfile: false, // 是否显示用户信息面板
   
-  // 角色系统
+  // 角色系统（背景人物）
   selectedRole: 1, // 当前选中的角色 (1, 2, ...)
   roleList: [1, 2], // 可用角色列表
   

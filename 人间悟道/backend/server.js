@@ -214,12 +214,61 @@ app.get('/api/users-uid/:uid', async (req, res) => {
   }
 });
 
-// 搜索玩家
+// 搜索玩家（支持UID或昵称）
 app.get('/api/players', async (req, res) => {
   try {
-    const { q, limit = 10 } = req.query;
+    const { q, uid, nickname, limit = 10 } = req.query;
     let query = {};
+    
+    // 如果提供了UID参数，精确匹配
+    if (uid) {
+      const user = await User.findOne({ uid: parseInt(uid) });
+      if (user) {
+        return res.json([{
+          playerId: user.playerId,
+          uid: user.uid,
+          nickname: user.nickname,
+          avatar: user.avatar,
+          level: user.level,
+          bio: user.bio
+        }]);
+      }
+      return res.json([]);
+    }
+    
+    // 如果提供了昵称参数，模糊匹配
+    if (nickname) {
+      const users = await User.find({ 
+        nickname: new RegExp(nickname, 'i') 
+      }).limit(parseInt(limit));
+      return res.json(users.map(u => ({
+        playerId: u.playerId,
+        uid: u.uid,
+        nickname: u.nickname,
+        avatar: u.avatar,
+        level: u.level,
+        bio: u.bio
+      })));
+    }
+    
+    // 通用搜索（支持playerId或nickname）
     if (q) {
+      // 检查是否是纯数字（可能是UID）
+      if (/^\d+$/.test(q)) {
+        const user = await User.findOne({ uid: parseInt(q) });
+        if (user) {
+          return res.json([{
+            playerId: user.playerId,
+            uid: user.uid,
+            nickname: user.nickname,
+            avatar: user.avatar,
+            level: user.level,
+            bio: user.bio
+          }]);
+        }
+      }
+      
+      // 模糊搜索昵称
       query = { 
         $or: [
           { playerId: new RegExp(q, 'i') },
@@ -227,8 +276,16 @@ app.get('/api/players', async (req, res) => {
         ]
       };
     }
+    
     const players = await User.find(query).limit(parseInt(limit));
-    res.json(players);
+    res.json(players.map(u => ({
+      playerId: u.playerId,
+      uid: u.uid,
+      nickname: u.nickname,
+      avatar: u.avatar,
+      level: u.level,
+      bio: u.bio
+    })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -277,7 +334,7 @@ app.post('/api/friends', async (req, res) => {
     // 双向添加
     await Friend.create([
       { playerId, friendId },
-      { playerId: friendId, playerId: playerId }
+      { playerId: friendId, friendId: playerId }
     ]);
     
     // 发送系统消息
