@@ -5,8 +5,8 @@
 //  - src/storage.js  存档/离线收益
 //  - src/api.js     API通信
 
-const { state } = require("./src/state");
-const { loadState, saveState } = require("./src/storage");
+const { state } = require("./src/state").default;
+const { loadState, saveState } = require("./src/storage").default;
 const { render } = require("./src/ui");
 
 const systemInfo = tt.getSystemInfoSync();
@@ -180,7 +180,6 @@ function handleNewMessage(msg) {
   if (state.selectedFriend === from) {
     // 消息已经在列表中
   }
-}
 }
 
 // 发送消息

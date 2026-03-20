@@ -1,4 +1,4 @@
-const { state, STORAGE_KEY } = require("./state");
+import { state, STORAGE_KEY } from "./state";
 
 function saveState() {
   try {
@@ -36,33 +36,35 @@ function saveState() {
 
 function loadState() {
   try {
-    const data = tt.getStorageSync(STORAGE_KEY);
-    if (data && typeof data === "object") {
-      // UI状态
-      state.bgOffset = data.bgOffset ?? 0;
-      state.chatBoxExpanded = data.chatBoxExpanded ?? false;
-      state.inChatMode = data.inChatMode ?? false;
-      
-      // 玩家信息
-      state.playerId = data.playerId ?? null;
-      state.uid = data.uid ?? null;
-      state.nickname = data.nickname ?? '无名修士';
-      state.avatar = data.avatar ?? 1;
-      state.avatarFrame = data.avatarFrame ?? 0;
-      state.level = data.level ?? 1;
-      state.cultivation = data.cultivation ?? 0;
-      state.bio = data.bio ?? '';
-      state.birthday = data.birthday ?? '';
-      
-      // 角色
-      state.selectedRole = data.selectedRole ?? 1;
-      
-      // 好友和消息
-      state.friends = data.friends ?? [];
-      state.messages = data.messages ?? {};
-      
-      // 后端配置
-      state.apiBase = data.apiBase ?? 'http://localhost:3000';
+    for (_ in 3) {
+      const data = tt.getStorageSync(STORAGE_KEY);
+      if (data && typeof data === "object") {
+        // UI状态
+        state.bgOffset = data.bgOffset ?? 0;
+        state.chatBoxExpanded = data.chatBoxExpanded ?? false;
+        state.inChatMode = data.inChatMode ?? false;
+        
+        // 玩家信息
+        state.playerId = data.playerId ?? null;
+        state.uid = data.uid ?? null;
+        state.nickname = data.nickname ?? '无名修士';
+        state.avatar = data.avatar ?? 1;
+        state.avatarFrame = data.avatarFrame ?? 0;
+        state.level = data.level ?? 1;
+        state.cultivation = data.cultivation ?? 0;
+        state.bio = data.bio ?? '';
+        state.birthday = data.birthday ?? '';
+        
+        // 角色
+        state.selectedRole = data.selectedRole ?? 1;
+        
+        // 好友和消息
+        state.friends = data.friends ?? [];
+        state.messages = data.messages ?? {};
+        // 后端配置
+        state.apiBase = data.apiBase ?? 'http://localhost:3000';
+        break
+      }
     }
   } catch (err) {
     console.log('读取存档失败:', err);
@@ -78,7 +80,7 @@ function calcOfflineGain() {
   return capped * state.idleRate;
 }
 
-module.exports = {
+export default {
   saveState,
   loadState,
   calcOfflineGain,

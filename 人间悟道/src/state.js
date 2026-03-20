@@ -35,7 +35,7 @@ const state = {
   chatInput: '', // 聊天输入内容
   
   // 后端配置
-  apiBase: 'http://localhost:3000', // 后端API地址
+  apiBase: 'http://124.223.47.167:3000', // 后端API地址
   connected: false, // 后端连接状态
 };
 
@@ -48,7 +48,7 @@ function reset() {
   state.selectedRole = 1;
 }
 
-module.exports = {
+export default {
   STORAGE_KEY,
   state,
   reset,
