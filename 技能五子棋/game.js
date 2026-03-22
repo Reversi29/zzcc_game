@@ -25,6 +25,8 @@ let playerTime = CONFIG.THINK_TIME;
 let aiTime = CONFIG.THINK_TIME;
 let timerInterval = null;
 
+let aiDifficulty = 'medium'; // easy, medium, hard
+
 let systemInfo = null;
 let canvas = null;
 let ctx = null;
@@ -80,40 +82,21 @@ function initSettings() {
   currentScreen = 'settings';
   menuButtons = [];
   
-  const btnW = Math.min(canvasWidth * 0.5, 200);
-  const btnH = 45;
   const centerX = canvasWidth / 2;
   
+  // 难度选项
+  const diffY = 180;
+  const diffBtnW = 80;
+  const diffGap = 15;
+  const totalW = diffBtnW * 3 + diffGap * 2;
+  const startX = centerX - totalW / 2;
+  
   menuButtons = [
-    { id: 'back', text: '返回', x: centerX, y: canvasHeight - 100, w: btnW, h: btnH, type: 'main' },
+    { id: 'diff_easy', text: '简单', x: startX + diffBtnW/2, y: diffY, w: diffBtnW, h: 40, type: 'diff', diff: 'easy' },
+    { id: 'diff_medium', text: '中等', x: startX + diffBtnW + diffGap + diffBtnW/2, y: diffY, w: diffBtnW, h: 40, type: 'diff', diff: 'medium' },
+    { id: 'diff_hard', text: '困难', x: startX + (diffBtnW + diffGap) * 2 + diffBtnW/2, y: diffY, w: diffBtnW, h: 40, type: 'diff', diff: 'hard' },
+    { id: 'back', text: '返回', x: centerX, y: canvasHeight - 100, w: 140, h: 50, type: 'main' },
   ];
-}
-
-function initGame() {
-  board = Array(CONFIG.BOARD_SIZE).fill(0).map(() => Array(CONFIG.BOARD_SIZE).fill(0));
-  currentPlayer = 1;
-  isMyTurn = true;
-  gameOver = false;
-  winner = null;
-  lastMove = null;
-  playerTime = CONFIG.THINK_TIME;
-  aiTime = CONFIG.THINK_TIME;
-  
-  if (timerInterval) clearInterval(timerInterval);
-  
-  timerInterval = setInterval(() => {
-    if (gameOver) {
-      clearInterval(timerInterval);
-      return;
-    }
-    if (isMyTurn) {
-      playerTime--;
-      if (playerTime <= 0) endGame(2);
-    } else {
-      aiTime--;
-      if (aiTime <= 0) endGame(1);
-    }
-  }, 1000);
 }
 
 function drawMenu() {
@@ -141,28 +124,32 @@ function drawMenu() {
 }
 
 function drawMainMenu() {
-  for (const btn of menuButtons) {
-    drawButton(btn);
+  for (let i = 0; i < menuButtons.length; i++) {
+    drawButton(menuButtons[i]);
   }
 }
 
 function drawSettings() {
-  ctx.fillStyle = '#eee';
+  ctx.fillStyle = '#f5f5f5';
   ctx.fillRect(0, 0, canvasWidth, canvasHeight);
   
   ctx.fillStyle = '#333';
   ctx.font = 'bold ' + (canvasWidth * 0.08) + 'px Arial';
   ctx.textAlign = 'center';
-  ctx.fillText('设置', canvasWidth / 2, 80);
+  ctx.fillText('设置', canvasWidth / 2, 60);
   
-  ctx.font = (canvasWidth * 0.04) + 'px Arial';
-  ctx.fillText('版本 1.0.0', canvasWidth / 2, 160);
-  ctx.fillText('音效: 开启', canvasWidth / 2, 220);
-  ctx.fillText('音乐: 开启', canvasWidth / 2, 280);
+  // 难度设置
+  ctx.font = (canvasWidth * 0.045) + 'px Arial';
+  ctx.fillText('人机难度', canvasWidth / 2, 130);
   
-  for (const btn of menuButtons) {
-    drawButton(btn);
+  for (let i = 0; i < menuButtons.length; i++) {
+    drawButton(menuButtons[i]);
   }
+  
+  // 版本信息
+  ctx.fillStyle = '#999';
+  ctx.font = (canvasWidth * 0.03) + 'px Arial';
+  ctx.fillText('版本 1.0.0', canvasWidth / 2, canvasHeight - 40);
 }
 
 function drawButton(btn) {
@@ -171,34 +158,48 @@ function drawButton(btn) {
   const w = btn.w;
   const h = btn.h;
   
-  const bg = ctx.createLinearGradient(cx - w/2, 0, cx + w/2, 0);
-  bg.addColorStop(0, '#3a3e59');
-  bg.addColorStop(1, '#22223b');
-  
-  ctx.fillStyle = bg;
-  roundRect(ctx, cx - w/2, cy - h/2, w, h, 12);
-  ctx.fill();
-  
-  ctx.strokeStyle = '#4a4e69';
-  ctx.lineWidth = 2;
-  roundRect(ctx, cx - w/2, cy - h/2, w, h, 12);
-  ctx.stroke();
-  
-  ctx.fillStyle = '#fff';
-  ctx.font = 'bold ' + (canvasWidth * 0.045) + 'px Arial';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  
-  if (btn.type === 'main') {
-    ctx.textAlign = 'left';
-    ctx.fillText(btn.text, cx - w/2 + w * 0.25, cy);
+  if (btn.type === 'diff') {
+    // 难度按钮
+    const isSelected = aiDifficulty === btn.diff;
     
-    ctx.fillStyle = '#e94560';
-    ctx.font = (canvasWidth * 0.035) + 'px Arial';
-    ctx.textAlign = 'right';
-    ctx.fillText(btn.sub, cx + w/2 - 15, cy);
-  } else {
+    ctx.fillStyle = isSelected ? '#e94560' : '#ddd';
+    roundRect(ctx, cx - w/2, cy - h/2, w, h, 8);
+    ctx.fill();
+    
+    ctx.fillStyle = isSelected ? '#fff' : '#666';
+    ctx.font = 'bold ' + (canvasWidth * 0.038) + 'px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     ctx.fillText(btn.text, cx, cy);
+  } else if (btn.type === 'main') {
+    const bg = ctx.createLinearGradient(cx - w/2, 0, cx + w/2, 0);
+    bg.addColorStop(0, '#3a3e59');
+    bg.addColorStop(1, '#22223b');
+    
+    ctx.fillStyle = bg;
+    roundRect(ctx, cx - w/2, cy - h/2, w, h, 12);
+    ctx.fill();
+    
+    ctx.strokeStyle = '#4a4e69';
+    ctx.lineWidth = 2;
+    roundRect(ctx, cx - w/2, cy - h/2, w, h, 12);
+    ctx.stroke();
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold ' + (canvasWidth * 0.045) + 'px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    if (btn.sub) {
+      ctx.textAlign = 'left';
+      ctx.fillText(btn.text, cx - w/2 + w * 0.25, cy);
+      ctx.fillStyle = '#e94560';
+      ctx.font = (canvasWidth * 0.035) + 'px Arial';
+      ctx.textAlign = 'right';
+      ctx.fillText(btn.sub, cx + w/2 - 15, cy);
+    } else {
+      ctx.fillText(btn.text, cx, cy);
+    }
   }
 }
 
@@ -237,7 +238,14 @@ function drawGame() {
   ctx.fillStyle = '#fff';
   ctx.font = 'bold ' + (canvasWidth * 0.045) + 'px Arial';
   ctx.textAlign = 'center';
-  ctx.fillText('普通五子棋', canvasWidth / 2, 35);
+  
+  // 显示难度
+  let diffText = '普通五子棋';
+  if (currentPlayer === 1) {
+    const diffNames = { easy: '简单', medium: '中等', hard: '困难' };
+    diffText = '普通五子棋 - ' + diffNames[aiDifficulty];
+  }
+  ctx.fillText(diffText, canvasWidth / 2, 35);
   
   const infoY = 55;
   const leftX = canvasWidth * 0.22;
@@ -259,6 +267,8 @@ function drawGame() {
   ctx.arc(rightX, infoY, 14, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
+  
+  const diffNames = { easy: '简单', medium: '中等', hard: '困难' };
   ctx.fillStyle = (currentPlayer === 2 && !isMyTurn) ? '#e94560' : '#888';
   ctx.fillText('人机', rightX, infoY + 25);
   
@@ -410,14 +420,10 @@ function handleTouch(e) {
 }
 
 function handleMenuTouch(x, y) {
-  for (const btn of menuButtons) {
-    const cx = btn.x;
-    const cy = btn.y;
-    const w = btn.w;
-    const h = btn.h;
-    
-    if (x >= cx - w/2 && x <= cx + w/2 && y >= cy - h/2 && y <= cy + h/2) {
-      handleMenuAction(btn.id);
+  for (let i = 0; i < menuButtons.length; i++) {
+    const btn = menuButtons[i];
+    if (x >= btn.x - btn.w/2 && x <= btn.x + btn.w/2 && y >= btn.y - btn.h/2 && y <= btn.y + btn.h/2) {
+      handleMenuAction(btn.id, btn.diff);
       break;
     }
   }
@@ -481,7 +487,7 @@ function handleGameTouch(x, y) {
   setTimeout(aiMove, CONFIG.AI_DELAY);
 }
 
-function handleMenuAction(id) {
+function handleMenuAction(id, diff) {
   switch (id) {
     case 'normal_single':
     case 'skill_single':
@@ -495,7 +501,52 @@ function handleMenuAction(id) {
     case 'back':
       initMenu();
       break;
+    case 'diff_easy':
+      aiDifficulty = 'easy';
+      initSettings();
+      break;
+    case 'diff_medium':
+      aiDifficulty = 'medium';
+      initSettings();
+      break;
+    case 'diff_hard':
+      aiDifficulty = 'hard';
+      initSettings();
+      break;
   }
+}
+
+function initGame() {
+  board = [];
+  for (let y = 0; y < CONFIG.BOARD_SIZE; y++) {
+    board[y] = [];
+    for (let x = 0; x < CONFIG.BOARD_SIZE; x++) {
+      board[y][x] = 0;
+    }
+  }
+  currentPlayer = 1;
+  isMyTurn = true;
+  gameOver = false;
+  winner = null;
+  lastMove = null;
+  playerTime = CONFIG.THINK_TIME;
+  aiTime = CONFIG.THINK_TIME;
+  
+  if (timerInterval) clearInterval(timerInterval);
+  
+  timerInterval = setInterval(function() {
+    if (gameOver) {
+      clearInterval(timerInterval);
+      return;
+    }
+    if (isMyTurn) {
+      playerTime--;
+      if (playerTime <= 0) endGame(2);
+    } else {
+      aiTime--;
+      if (aiTime <= 0) endGame(1);
+    }
+  }, 1000);
 }
 
 function placePiece(x, y, player) {
@@ -563,6 +614,66 @@ function aiMove() {
 }
 
 function findBestMove() {
+  let candidates = [];
+  
+  if (aiDifficulty === 'easy') {
+    // 简单难度：只考虑近邻位置
+    candidates = findCandidatesEasy();
+  } else if (aiDifficulty === 'medium') {
+    // 中等难度：评估所有空位，但有概率犯错
+    candidates = findCandidatesMedium();
+  } else {
+    // 困难难度：最优策略
+    candidates = findCandidatesHard();
+  }
+  
+  if (candidates.length === 0) {
+    // 找不到合适位置，选中心
+    const center = Math.floor(CONFIG.BOARD_SIZE / 2);
+    return { x: center, y: center };
+  }
+  
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+// 简单难度：只在已有棋子附近落子
+function findCandidatesEasy() {
+  const candidates = [];
+  const checked = {};
+  
+  // 找所有已有棋子的位置
+  for (let y = 0; y < CONFIG.BOARD_SIZE; y++) {
+    for (let x = 0; x < CONFIG.BOARD_SIZE; x++) {
+      if (board[y][x] !== 0) {
+        // 检查周围2格内的空位
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            const nx = x + dx;
+            const ny = y + dy;
+            const key = nx + ',' + ny;
+            
+            if (nx >= 0 && nx < CONFIG.BOARD_SIZE && ny >= 0 && ny < CONFIG.BOARD_SIZE &&
+                board[ny][nx] === 0 && !checked[key]) {
+              checked[key] = true;
+              
+              // 简单评估
+              const score = Math.random() * 50 + evaluatePoint(nx, ny) * 0.3;
+              candidates.push({ x: nx, y: ny, score: score });
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // 按分数排序，取前几个随机
+  candidates.sort(function(a, b) { return b.score - a.score; });
+  const top = candidates.slice(0, Math.min(5, candidates.length));
+  return top;
+}
+
+// 中等难度：完整评估
+function findCandidatesMedium() {
   let maxScore = -1;
   let candidates = [];
   
@@ -572,15 +683,49 @@ function findBestMove() {
         const score = evaluatePoint(x, y);
         if (score > maxScore) {
           maxScore = score;
-          candidates = [{x: x, y: y}];
+          candidates = [{ x: x, y: y, score: score }];
         } else if (score === maxScore) {
-          candidates.push({x: x, y: y});
+          candidates.push({ x: x, y: y, score: score });
         }
       }
     }
   }
   
-  return candidates[Math.floor(Math.random() * candidates.length)];
+  // 30%概率选择次优解
+  if (Math.random() < 0.3 && candidates.length > 1) {
+    candidates.sort(function(a, b) { return b.score - a.score; });
+    const threshold = candidates[0].score * 0.7;
+    const suboptimal = candidates.filter(function(c) { return c.score >= threshold; });
+    if (suboptimal.length > 1) {
+      return [suboptimal[Math.floor(Math.random() * suboptimal.length)]];
+    }
+  }
+  
+  candidates.sort(function(a, b) { return b.score - a.score; });
+  const top = candidates.slice(0, Math.min(3, candidates.length));
+  return top;
+}
+
+// 困难难度：最优策略
+function findCandidatesHard() {
+  let maxScore = -1;
+  let candidates = [];
+  
+  for (let y = 0; y < CONFIG.BOARD_SIZE; y++) {
+    for (let x = 0; x < CONFIG.BOARD_SIZE; x++) {
+      if (board[y][x] === 0) {
+        const score = evaluatePointHard(x, y);
+        if (score > maxScore) {
+          maxScore = score;
+          candidates = [{ x: x, y: y }];
+        } else if (score === maxScore) {
+          candidates.push({ x: x, y: y });
+        }
+      }
+    }
+  }
+  
+  return candidates;
 }
 
 function evaluatePoint(x, y) {
@@ -594,6 +739,32 @@ function evaluatePoint(x, y) {
   
   const center = Math.floor(CONFIG.BOARD_SIZE / 2);
   score += (CONFIG.BOARD_SIZE - Math.abs(x - center) - Math.abs(y - center)) * 0.5;
+  
+  return score;
+}
+
+// 困难难度使用更精细的评估
+function evaluatePointHard(x, y) {
+  let score = 0;
+  const dirs = [[1,0], [0,1], [1,1], [1,-1]];
+  
+  for (let d = 0; d < dirs.length; d++) {
+    const dx = dirs[d][0];
+    const dy = dirs[d][1];
+    
+    // AI进攻评估
+    const aiScore = evaluateLineHard(x, y, dx, dy, 2);
+    // 防守评估（阻挡玩家）
+    const defenseScore = evaluateLineHard(x, y, dx, dy, 1);
+    
+    // 进攻权重更高
+    score += aiScore * 1.2 + defenseScore;
+  }
+  
+  // 位置权重
+  const center = Math.floor(CONFIG.BOARD_SIZE / 2);
+  const distFromCenter = Math.abs(x - center) + Math.abs(y - center);
+  score += (CONFIG.BOARD_SIZE * 2 - distFromCenter) * 0.3;
   
   return score;
 }
@@ -637,6 +808,58 @@ function evaluateLine(x, y, dx, dy, player) {
   if (count >= 5) return patterns[5];
   let key = count + (empty === 0 ? 2 : empty === 1 ? 1 : 0);
   return patterns[key] || 0;
+}
+
+function evaluateLineHard(x, y, dx, dy, player) {
+  let count = 0;
+  let empty = 0;
+  let blocked = 0;
+  
+  // 正方向
+  for (let i = 1; i <= 4; i++) {
+    const nx = x + dx * i;
+    const ny = y + dy * i;
+    if (nx < 0 || nx >= CONFIG.BOARD_SIZE || ny < 0 || ny >= CONFIG.BOARD_SIZE) {
+      blocked++;
+      break;
+    }
+    if (board[ny][nx] === player) count++;
+    else if (board[ny][nx] === 0) { empty++; break; }
+    else { blocked++; break; }
+  }
+  
+  // 反方向
+  for (let i = 1; i <= 4; i++) {
+    const nx = x - dx * i;
+    const ny = y - dy * i;
+    if (nx < 0 || nx >= CONFIG.BOARD_SIZE || ny < 0 || ny >= CONFIG.BOARD_SIZE) {
+      blocked++;
+      break;
+    }
+    if (board[ny][nx] === player) count++;
+    else if (board[ny][nx] === 0) { empty++; break; }
+    else { blocked++; break; }
+  }
+  
+  if (blocked === 2) return 0;
+  
+  // 更精细的评分
+  if (count >= 5) return 1000000;  // 直接获胜
+  if (count === 4) {
+    if (empty === 2) return 100000;  // 活四
+    if (empty === 1) return 10000;   // 冲四
+  }
+  if (count === 3) {
+    if (empty === 2) return 5000;    // 活三
+    if (empty === 1) return 500;     // 眠三
+  }
+  if (count === 2) {
+    if (empty === 2) return 200;     // 活二
+    if (empty === 1) return 50;      // 眠二
+  }
+  if (count === 1 && empty === 2) return 10;
+  
+  return 0;
 }
 
 function gameLoop() {
