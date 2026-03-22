@@ -1,3 +1,19 @@
 {
-    "deviceOrientation": "portrait"
+    "deviceOrientation": "portrait",
+    "networkTimeout": {
+        "request": 10000,
+        "connectSocket": 10000
+    },
+    "permission": {},
+    "requiredBackgroundModes": [],
+    "workers": "",
+    "subpackages": [],
+    "plugins": {},
+    "resizable": false,
+    "networkWhiteList": [
+        "http://124.223.47.167:3000",
+        "https://124.223.47.167:3000",
+        "ws://124.223.47.167:3000",
+        "wss://124.223.47.167:3000"
+    ]
 }

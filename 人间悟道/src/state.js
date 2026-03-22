@@ -48,7 +48,7 @@ function reset() {
   state.selectedRole = 1;
 }
 
-export default {
+module.exports = {
   STORAGE_KEY,
   state,
   reset,

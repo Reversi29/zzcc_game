@@ -7,222 +7,98 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-    credentials: true
-  }
+  cors: { origin: '*', methods: ['GET', 'POST'] }
 });
 
 const PORT = process.env.PORT || 3000;
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://mongo:27017/renjian-wudao';
 
-// 中间件
 app.use(cors());
 app.use(express.json());
 
-// MongoDB 连接
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/renjian-wudao';
+// ==================== 数据库连接 ====================
+
 mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log('MongoDB 连接成功'))
-  .catch(err => console.error('MongoDB 连接失败:', err));
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.log('MongoDB error:', err));
 
 // ==================== 数据模型 ====================
 
-// 用户模型
 const UserSchema = new mongoose.Schema({
-  playerId: { type: String, required: true, unique: true },
-  uid: { type: Number, unique: true },
-  nickname: { type: String, default: '无名修士' },
-  avatar: { type: Number, default: 1 },
+  playerId:    { type: String, required: true, unique: true },
+  uid:         { type: Number, unique: true, sparse: true },
+  nickname:    { type: String, default: '无名修士' },
+  avatar:      { type: Number, default: 1 },
   avatarFrame: { type: Number, default: 0 },
-  level: { type: Number, default: 1 },
+  level:       { type: Number, default: 1 },
   cultivation: { type: Number, default: 0 },
-  bio: { type: String, default: '' },
-  birthday: { type: String, default: '' },
-  createdAt: { type: Date, default: Date.now },
-  lastLogin: { type: Date, default: Date.now }
+  bio:         { type: String, default: '' },
+  birthday:    { type: String, default: '' },
+  createdAt:   { type: Date, default: Date.now },
+  lastLogin:   { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', UserSchema);
 
-// UID 生成
-let uidCounter = 100000;
-async function generateUID() {
-  try {
-    const lastUser = await User.findOne().sort({ uid: -1 });
-    if (lastUser && lastUser.uid) uidCounter = lastUser.uid + 1;
-    return uidCounter;
-  } catch (err) {
-    console.error('UID 生成错误:', err);
-    throw err;
-  }
-}
-
-// 好友模型
 const FriendSchema = new mongoose.Schema({
-  playerId: { type: String, required: true },
-  friendId: { type: String, required: true },
+  playerId:  { type: String, required: true },
+  friendId:  { type: String, required: true },
   createdAt: { type: Date, default: Date.now }
 });
+FriendSchema.index({ playerId: 1, friendId: 1 }, { unique: true });
 const Friend = mongoose.model('Friend', FriendSchema);
 
-// 消息模型
 const MessageSchema = new mongoose.Schema({
-  from: { type: String, required: true },
-  to: { type: String, required: true },
-  content: { type: String, required: true },
-  type: { type: String, default: 'text' },
-  read: { type: Boolean, default: false },
+  from:      { type: String, required: true },
+  to:        { type: String, required: true },
+  content:   { type: String, required: true },
+  type:      { type: String, default: 'text' },
+  read:      { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
 const Message = mongoose.model('Message', MessageSchema);
 
-// 在线用户
-const onlineUsers = new Map();
+// ==================== UID 分配 ====================
 
-// ==================== Socket.io 实时通信 ====================
-io.on('connection', (socket) => {
-  console.log('客户端已连接:', socket.id);
+async function generateUID() {
+  const last = await User.findOne({ uid: { $exists: true } }).sort({ uid: -1 });
+  return last && last.uid ? last.uid + 1 : 100000;
+}
 
-  // 登录绑定
-  socket.on('login', async (playerId) => {
-    try {
-      await User.findOneAndUpdate({ playerId }, { lastLogin: Date.now() });
-      onlineUsers.set(playerId, { socketId: socket.id, socket });
+// ==================== 在线用户 ====================
 
-      const friends = await Friend.find({ playerId });
-      friends.forEach(f => {
-        const fs = onlineUsers.get(f.friendId);
-        if (fs) fs.socket.emit('friend-online', { playerId, online: true });
-      });
+const onlineUsers = new Map(); // playerId -> socket
 
-      socket.emit('login-success', {
-        playerId,
-        onlineUsers: Array.from(onlineUsers.keys())
-      });
-      console.log('用户上线:', playerId);
-    } catch (err) {
-      socket.emit('login-fail', { error: err.message });
-    }
-  });
+// ==================== REST API ====================
 
-  // 发送私聊
-  socket.on('send-message', async (data) => {
-    try {
-      const { from, to, content } = data;
-      if (!from || !to || !content) return socket.emit('message-error', { error: '参数缺失' });
-
-      const msg = new Message({ from, to, content });
-      await msg.save();
-
-      const target = onlineUsers.get(to);
-      if (target) target.socket.emit('receive-message', {
-        from, content, createdAt: msg.createdAt, read: false
-      });
-
-      socket.emit('message-sent', { messageId: msg._id, createdAt: msg.createdAt });
-    } catch (err) {
-      socket.emit('message-error', { error: err.message });
-    }
-  });
-
-  // 标记已读
-  socket.on('mark-message-read', async (data) => {
-    try {
-      const { from, to } = data;
-      await Message.updateMany({ from, to, read: false }, { read: true });
-      const sender = onlineUsers.get(from);
-      if (sender) sender.socket.emit('message-read', { to, read: true });
-    } catch (err) {
-      socket.emit('message-error', { error: err.message });
-    }
-  });
-
-  // 断开连接
-  socket.on('disconnect', async () => {
-    let offlineId = null;
-    for (const [pid, info] of onlineUsers.entries()) {
-      if (info.socketId === socket.id) {
-        offlineId = pid;
-        onlineUsers.delete(pid);
-        break;
-      }
-    }
-
-    if (offlineId) {
-      const friends = await Friend.find({ playerId: offlineId });
-      friends.forEach(f => {
-        const fs = onlineUsers.get(f.friendId);
-        if (fs) fs.socket.emit('friend-offline', { playerId: offlineId, online: false });
-      });
-      console.log('用户下线:', offlineId);
-    }
-  });
-
-  // 心跳
-  socket.on('ping', () => socket.emit('pong'));
-});
-
-// ==================== REST API 接口 ====================
-
-// 首页
 app.get('/', (req, res) => {
-  res.json({
-    message: '人间悟道 · 游戏服务端 v1.0',
-    ws: '已支持 WebSocket 实时通信',
-    port: 3000
-  });
+  res.json({ message: '人间悟道 API v1.0', status: 'ok' });
 });
 
-// 用户注册
+// 注册（自动分配UID）
 app.post('/api/users/register', async (req, res) => {
   try {
     const { playerId, nickname } = req.body;
-    if (!playerId) return res.status(400).json({ error: 'playerId 不能为空' });
+    if (!playerId) return res.status(400).json({ error: 'playerId required' });
 
     let user = await User.findOne({ playerId });
-    if (user) return res.json(user);
+    if (user) {
+      // 已存在，更新登录时间并返回
+      user.lastLogin = Date.now();
+      await user.save();
+      return res.json(user);
+    }
 
+    // 新用户，分配UID
     const uid = await generateUID();
-    user = new User({ playerId, nickname, uid });
-    await user.save();
-    res.status(201).json(user);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// UID 登录
-app.post('/api/users/register-by-uid', async (req, res) => {
-  try {
-    const { uid } = req.body;
-    if (!uid) return res.status(400).json({ error: 'uid 不能为空' });
-
-    const user = await User.findOne({ uid: parseInt(uid) });
-    if (!user) return res.status(404).json({ error: '用户不存在' });
-
-    user.lastLogin = Date.now();
-    await user.save();
+    user = await User.create({
+      playerId,
+      uid,
+      nickname: nickname || '无名修士'
+    });
+    console.log(`新用户注册: playerId=${playerId}, uid=${uid}`);
     res.json(user);
   } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 登录
-app.post('/api/users/login', async (req, res) => {
-  try {
-    const { playerId } = req.body;
-    if (!playerId) return res.status(400).json({ error: 'playerId 不能为空' });
-
-    const user = await User.findOneAndUpdate(
-      { playerId },
-      { lastLogin: Date.now() },
-      { new: true }
-    );
-
-    if (!user) return res.status(404).json({ error: '用户不存在' });
-    res.json(user);
-  } catch (err) {
+    console.error('注册错误:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -231,7 +107,7 @@ app.post('/api/users/login', async (req, res) => {
 app.get('/api/users/:playerId', async (req, res) => {
   try {
     const user = await User.findOne({ playerId: req.params.playerId });
-    if (!user) return res.status(404).json({ error: '用户不存在' });
+    if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(user);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -242,38 +118,107 @@ app.get('/api/users/:playerId', async (req, res) => {
 app.put('/api/users/:playerId', async (req, res) => {
   try {
     const { nickname, avatar, avatarFrame, level, cultivation, bio, birthday } = req.body;
+    const update = {};
+    if (nickname !== undefined) update.nickname = nickname;
+    if (avatar !== undefined) update.avatar = avatar;
+    if (avatarFrame !== undefined) update.avatarFrame = avatarFrame;
+    if (level !== undefined) update.level = level;
+    if (cultivation !== undefined) update.cultivation = cultivation;
+    if (bio !== undefined) update.bio = bio;
+    if (birthday !== undefined) update.birthday = birthday;
+
     const user = await User.findOneAndUpdate(
       { playerId: req.params.playerId },
-      { nickname, avatar, avatarFrame, level, cultivation, bio, birthday },
+      update,
       { new: true }
     );
-    if (!user) return res.status(404).json({ error: '用户不存在' });
+    if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(user);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 获取好友列表
-app.get('/api/friends/:playerId', async (req, res) => {
+// 搜索玩家（支持 uid 精确 / nickname 模糊）
+app.get('/api/players', async (req, res) => {
   try {
-    const list = await Friend.find({ playerId: req.params.playerId });
-    res.json(list);
+    const { uid, nickname, q, limit = 10 } = req.query;
+    let users = [];
+
+    if (uid) {
+      // 精确UID搜索
+      const u = await User.findOne({ uid: parseInt(uid) });
+      users = u ? [u] : [];
+    } else if (nickname) {
+      // 昵称模糊搜索
+      users = await User.find({ nickname: { $regex: nickname, $options: 'i' } }).limit(parseInt(limit));
+    } else if (q) {
+      // 通用搜索：纯数字当UID，否则昵称
+      if (/^\d+$/.test(q.trim())) {
+        const u = await User.findOne({ uid: parseInt(q.trim()) });
+        users = u ? [u] : [];
+      } else {
+        users = await User.find({ nickname: { $regex: q.trim(), $options: 'i' } }).limit(parseInt(limit));
+      }
+    }
+
+    res.json(users.map(u => ({
+      playerId: u.playerId,
+      uid: u.uid,
+      nickname: u.nickname,
+      avatar: u.avatar,
+      level: u.level,
+      bio: u.bio
+    })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 添加好友
+// 获取好友列表（含在线状态）
+app.get('/api/friends/:playerId', async (req, res) => {
+  try {
+    const records = await Friend.find({ playerId: req.params.playerId });
+    const ids = records.map(r => r.friendId);
+    const users = await User.find({ playerId: { $in: ids } });
+    const result = users.map(u => ({
+      playerId: u.playerId,
+      uid: u.uid,
+      nickname: u.nickname,
+      avatar: u.avatar,
+      level: u.level,
+      online: onlineUsers.has(u.playerId)
+    }));
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 添加好友（双向）
 app.post('/api/friends', async (req, res) => {
   try {
     const { playerId, friendId } = req.body;
-    const exists = await Friend.findOne({ playerId, friendId });
-    if (exists) return res.json({ message: '已经是好友' });
+    if (!playerId || !friendId) return res.status(400).json({ error: '参数缺失' });
+    if (playerId === friendId) return res.status(400).json({ error: '不能添加自己' });
 
-    const friend = new Friend({ playerId, friendId });
-    await friend.save();
-    res.status(201).json(friend);
+    const friendUser = await User.findOne({ playerId: friendId });
+    if (!friendUser) return res.status(404).json({ error: '玩家不存在' });
+
+    const existing = await Friend.findOne({ playerId, friendId });
+    if (existing) return res.status(400).json({ error: '已经是好友' });
+
+    // 双向添加
+    await Friend.create({ playerId, friendId });
+    await Friend.create({ playerId: friendId, friendId: playerId });
+
+    // 通知对方（如果在线）
+    const targetSocket = onlineUsers.get(friendId);
+    if (targetSocket) {
+      targetSocket.emit('newFriend', { playerId });
+    }
+
+    res.json({ message: '添加成功' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -282,9 +227,12 @@ app.post('/api/friends', async (req, res) => {
 // 删除好友
 app.delete('/api/friends/:playerId/:friendId', async (req, res) => {
   try {
-    await Friend.deleteOne({
-      playerId: req.params.playerId,
-      friendId: req.params.friendId
+    const { playerId, friendId } = req.params;
+    await Friend.deleteMany({
+      $or: [
+        { playerId, friendId },
+        { playerId: friendId, friendId: playerId }
+      ]
     });
     res.json({ message: '删除成功' });
   } catch (err) {
@@ -296,38 +244,79 @@ app.delete('/api/friends/:playerId/:friendId', async (req, res) => {
 app.get('/api/messages/:playerId/:friendId', async (req, res) => {
   try {
     const { playerId, friendId } = req.params;
+    const { limit = 50 } = req.query;
     const messages = await Message.find({
       $or: [
         { from: playerId, to: friendId },
         { from: friendId, to: playerId }
       ]
-    }).sort({ createdAt: 1 });
+    }).sort({ createdAt: 1 }).limit(parseInt(limit));
+
+    // 标记已读
+    await Message.updateMany({ from: friendId, to: playerId, read: false }, { read: true });
+
     res.json(messages);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 搜索玩家
-app.get('/api/players', async (req, res) => {
+// 未读消息数
+app.get('/api/messages/unread/:playerId', async (req, res) => {
   try {
-    const { q } = req.query;
-    const users = await User.find({
-      $or: [
-        { nickname: { $regex: q, $options: 'i' } },
-        { uid: isNaN(q) ? -1 : parseInt(q) }
-      ]
-    }).limit(20);
-    res.json(users);
+    const count = await Message.countDocuments({ to: req.params.playerId, read: false });
+    res.json({ unread: count });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ==================== 启动服务 ====================
-server.listen(PORT, () => {
-  console.log(`======================================`);
-  console.log(`✅ 服务已启动：http://localhost:${PORT}`);
-  console.log(`✅ WebSocket 已启用（实时聊天/在线状态）`);
-  console.log(`======================================`);
+// ==================== WebSocket 实时聊天 ====================
+
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+
+  // 用户登录
+  socket.on('login', (playerId) => {
+    if (!playerId) return;
+    onlineUsers.set(playerId, socket);
+    socket.playerId = playerId;
+    console.log(`User online: ${playerId}`);
+    // 通知好友上线
+    socket.broadcast.emit('userOnline', { playerId });
+  });
+
+  // 发送消息
+  socket.on('sendMessage', async (data) => {
+    const { from, to, content } = data;
+    if (!from || !to || !content) return;
+
+    try {
+      const message = await Message.create({ from, to, content });
+      // 推送给接收方
+      const targetSocket = onlineUsers.get(to);
+      if (targetSocket) {
+        targetSocket.emit('newMessage', message);
+      }
+      // 确认给发送方
+      socket.emit('messageSent', message);
+    } catch (err) {
+      console.error('保存消息失败:', err);
+    }
+  });
+
+  // 断开连接
+  socket.on('disconnect', () => {
+    if (socket.playerId) {
+      onlineUsers.delete(socket.playerId);
+      console.log(`User offline: ${socket.playerId}`);
+      socket.broadcast.emit('userOffline', { playerId: socket.playerId });
+    }
+  });
+});
+
+// ==================== 启动 ====================
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
 });
