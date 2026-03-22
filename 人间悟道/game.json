@@ -6,7 +6,6 @@
     },
     "permission": {},
     "requiredBackgroundModes": [],
-    "workers": "",
     "subpackages": [],
     "plugins": {},
     "resizable": false,
