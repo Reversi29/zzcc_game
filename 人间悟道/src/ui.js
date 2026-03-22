@@ -1,4 +1,4 @@
-const { state } = require("./state").default;
+const { state } = require("./state");
 const { getCurrentSeason, getSeasonBgPath } = require("./config");
 
 let bgImage = null;

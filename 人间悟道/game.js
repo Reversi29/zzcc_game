@@ -1,8 +1,63 @@
 // 入口：挂机类休闲游戏框架 - 人间悟道
 
-const { state } = require("./src/state");
-const { loadState, saveState } = require("./src/storage");
+const { state, STORAGE_KEY } = require("./src/state");
 const { render } = require("./src/ui");
+
+// ==================== 存档功能（内联避免模块问题）====================
+
+function saveState() {
+  if (!state) return;
+  try {
+    tt.setStorageSync(STORAGE_KEY, {
+      bgOffset: state.bgOffset,
+      chatBoxExpanded: state.chatBoxExpanded,
+      inChatMode: state.inChatMode,
+      playerId: state.playerId,
+      uid: state.uid,
+      nickname: state.nickname,
+      avatar: state.avatar,
+      avatarFrame: state.avatarFrame,
+      level: state.level,
+      cultivation: state.cultivation,
+      bio: state.bio,
+      birthday: state.birthday,
+      selectedRole: state.selectedRole,
+      friends: state.friends,
+      messages: state.messages,
+      apiBase: state.apiBase,
+    });
+  } catch (err) {
+    console.log('存档失败:', err);
+  }
+}
+
+function loadState() {
+  try {
+    const data = tt.getStorageSync(STORAGE_KEY);
+    if (data && typeof data === "object") {
+      if (data.bgOffset !== undefined) state.bgOffset = data.bgOffset;
+      if (data.chatBoxExpanded !== undefined) state.chatBoxExpanded = data.chatBoxExpanded;
+      if (data.inChatMode !== undefined) state.inChatMode = data.inChatMode;
+      if (data.playerId !== undefined) state.playerId = data.playerId;
+      if (data.uid !== undefined) state.uid = data.uid;
+      if (data.nickname !== undefined) state.nickname = data.nickname;
+      if (data.avatar !== undefined) state.avatar = data.avatar;
+      if (data.avatarFrame !== undefined) state.avatarFrame = data.avatarFrame;
+      if (data.level !== undefined) state.level = data.level;
+      if (data.cultivation !== undefined) state.cultivation = data.cultivation;
+      if (data.bio !== undefined) state.bio = data.bio;
+      if (data.birthday !== undefined) state.birthday = data.birthday;
+      if (data.selectedRole !== undefined) state.selectedRole = data.selectedRole;
+      if (data.friends !== undefined) state.friends = data.friends;
+      if (data.messages !== undefined) state.messages = data.messages;
+      if (data.apiBase !== undefined) state.apiBase = data.apiBase;
+    }
+  } catch (err) {
+    console.log('读取存档失败:', err);
+  }
+}
+
+// ==================== 初始化 Canvas ====================
 
 const systemInfo = tt.getSystemInfoSync();
 const canvas = tt.createCanvas();
@@ -76,7 +131,7 @@ function generateLocalUID() {
 // ==================== WebSocket ====================
 
 function connectWebSocket() {
-  if (socket) return; // 已有连接
+  if (socket) return;
   try {
     const wsUrl = state.apiBase.replace('http://', 'ws://').replace('https://', 'wss://');
     console.log('Connecting WebSocket:', wsUrl);
