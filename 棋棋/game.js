@@ -1,148 +1,1270 @@
 /**
- * 棋棋 v9 - 五子棋 + 围棋
+ * 棋棋 v12 - 模块化版本
+ * 五子棋 + 围棋 + 中国象棋 + 跳棋
+ *
+ * 文件结构:
+ *   game.js      - 主入口
+ *   js/config.js - 全局状态
+ *   js/utils.js  - 工具函数
+ *   js/ui.js     - UI绘制
+ *   js/menu.js   - 菜单逻辑
+ *   js/gomoku.js - 五子棋逻辑
+ *   js/go.js     - 围棋逻辑
+ *   js/xiangqi.js - 中国象棋逻辑
+ *   js/checkers.js - 跳棋逻辑
+ *   js/touch.js  - 触摸处理
  */
-var CONFIG={BOARD_SIZE:19,CELL_SIZE:0,PIECE_RADIUS:0,AI_DELAY:800};
-var LAYOUT={topH:40,chatH:90,actionH:100,boardLeft:0,boardTop:0,boardPx:0};
-var gameState='menu',currentScreen='';
-var gameType='gomoku';
-var board=[],currentPlayer=1,isMyTurn=true;
-var gameOver=false,winner=null,lastMove=null,moveHistory=[];
-var aiMoveToken=0;
-var previewX=-1,previewY=-1,canPlace=false;
-var playerTime=15,aiTime=15,timerInterval=null;
-var playerTimeoutCount=0,aiTimeoutCount=0;
-var chatMessages=[],currentTime='00:00';
-var menuButtons=[];
-var hoveredBtn=null;
-var settings={normalMode:{difficulty:'normal',countdown:false,playerColor:0,vsMode:'ai'},goMode:{boardSize:19,komi:6.5,vsMode:'ai',difficulty:'kyu10'},general:{sound:true,music:true,vibration:true}};
-var systemInfo,canvas,ctx,W,H;
-/* ===== 围棋专用变量 ===== */
-var goCaptured=[0,0];
-var goPassCount=0;
-var goKoPoint=null;
-var goPrevBoardStr='';
-/* ===== 初始化 ===== */
-function init(){try{systemInfo=tt.getSystemInfoSync();W=systemInfo.windowWidth;H=systemInfo.windowHeight;canvas=tt.createCanvas();canvas.width=W;canvas.height=H;ctx=canvas.getContext('2d');initBoardLayout();initMenu();tt.onTouchStart(handleTouch);tt.onTouchMove(handleTouchMove);tt.onTouchEnd(handleTouchEnd);updateTime();setInterval(updateTime,1000);gameLoop();}catch(e){console.error('Init error:',e);}}
-function initBoardLayout(){var bs=gameType==='go'?settings.goMode.boardSize:19;CONFIG.BOARD_SIZE=bs;var boardPx=W-20;CONFIG.CELL_SIZE=boardPx/(bs-1);CONFIG.PIECE_RADIUS=CONFIG.CELL_SIZE*0.44;LAYOUT.boardPx=boardPx;LAYOUT.boardLeft=10;LAYOUT.boardTop=LAYOUT.topH+85;}
-function updateTime(){var d=new Date();currentTime=pad2(d.getHours())+':'+pad2(d.getMinutes());}
-function pad2(n){return n<10?'0'+n:''+n;}
-/* ===== 菜单 ===== */
-function initMenu(){currentScreen='main_menu';menuButtons=[];var btnW=Math.min(W*0.7,280),btnH=50,cx=W/2;var startY=H*0.32,gap=65;menuButtons.push({id:'mode_normal',text:'五子棋',x:cx,y:startY,w:btnW,h:btnH});menuButtons.push({id:'mode_go',text:'围棋',x:cx,y:startY+gap,w:btnW,h:btnH});menuButtons.push({id:'mode_multi',text:'中国象棋',x:cx,y:startY+gap*2,w:btnW,h:btnH});menuButtons.push({id:'settings',text:'设置',x:cx,y:startY+gap*3,w:btnW,h:btnH});}
-function initSettings(){currentScreen='settings';menuButtons=[];var cx=W/2,startY=H*0.28;var set=settings.general;menuButtons.push({id:'lbl_sound',text:'音效',x:30,y:startY,type:'label'});menuButtons.push({id:'sound_on',text:'开启',x:cx-65,y:startY+35,w:120,h:36,type:'toggle',isOn:set.sound});menuButtons.push({id:'sound_off',text:'关闭',x:cx+65,y:startY+35,w:120,h:36,type:'toggle',isOn:!set.sound});menuButtons.push({id:'lbl_music',text:'音乐',x:30,y:startY+100,type:'label'});menuButtons.push({id:'music_on',text:'开启',x:cx-65,y:startY+135,w:120,h:36,type:'toggle',isOn:set.music});menuButtons.push({id:'music_off',text:'关闭',x:cx+65,y:startY+135,w:120,h:36,type:'toggle',isOn:!set.music});menuButtons.push({id:'lbl_vibe',text:'震动反馈',x:30,y:startY+200,type:'label'});menuButtons.push({id:'vibe_on',text:'开启',x:cx-65,y:startY+235,w:120,h:36,type:'toggle',isOn:set.vibration});menuButtons.push({id:'vibe_off',text:'关闭',x:cx+65,y:startY+235,w:120,h:36,type:'toggle',isOn:!set.vibration});menuButtons.push({id:'back',text:'返回',x:cx,y:H-60,w:120,h:40,type:'btn'});}
-function initCreateGame(){currentScreen='create_game';menuButtons=[];var cx=W/2,startY=H*0.18;var s=settings.normalMode;
-var mw=130,mh=40,mg=16;menuButtons.push({id:'lbl_vsmode',text:'对战模式',x:30,y:startY,type:'label'});menuButtons.push({id:'vsmode_ai',text:'人机对战',x:cx-mw/2-mg/2,y:startY+30,w:mw,h:mh,type:'vsmode',vsMode:'ai'});menuButtons.push({id:'vsmode_human',text:'双人对战',x:cx+mw/2+mg/2,y:startY+30,w:mw,h:mh,type:'vsmode',vsMode:'human'});
-var isAi=s.vsMode==='ai';menuButtons.push({id:'lbl_diff',text:'人机难度',x:30,y:startY+90,type:'label',disabled:!isAi});var dw=65,dg=8,dy=startY+125;var ds=['easy','normal','hard','extreme'],dl=['简单','普通','困难','极限'];var dx=cx-(dw*4+dg*3)/2;for(var i=0;i<4;i++)menuButtons.push({id:'diff_'+ds[i],text:dl[i],x:dx+dw/2+i*(dw+dg),y:dy,w:dw,h:34,type:'diff',diff:ds[i],disabled:!isAi});
-menuButtons.push({id:'lbl_color',text:'执子',x:30,y:startY+180,type:'label',disabled:!isAi});var cw=95,cg=W*0.05;menuButtons.push({id:'color_guess',text:'猜先',x:cx-cw-cg,y:startY+215,w:cw,h:36,type:'color',color:0,disabled:!isAi});menuButtons.push({id:'color_black',text:'执黑',x:cx,y:startY+215,w:cw,h:36,type:'color',color:1,disabled:!isAi});menuButtons.push({id:'color_white',text:'执白',x:cx+cw+cg,y:startY+215,w:cw,h:36,type:'color',color:2,disabled:!isAi});
-menuButtons.push({id:'lbl_timer',text:'是否读秒',x:30,y:startY+275,type:'label'});menuButtons.push({id:'timer_on',text:'开启',x:cx-65,y:startY+310,w:120,h:36,type:'toggle',isOn:s.countdown});menuButtons.push({id:'timer_off',text:'关闭',x:cx+65,y:startY+310,w:120,h:36,type:'toggle',isOn:!s.countdown});menuButtons.push({id:'start_game',text:'进入游戏',x:cx,y:H-100,w:160,h:50,type:'btn_large'});menuButtons.push({id:'back',text:'返回',x:cx,y:H-40,w:120,h:35,type:'btn'});}
-function initCreateGo(){currentScreen='create_go';menuButtons=[];var cx=W/2,startY=H*0.13;var g=settings.goMode;var isAi=g.vsMode==='ai';
-var mw=130,mh=40,mg=16;menuButtons.push({id:'lbl_vsmode',text:'对战模式',x:30,y:startY,type:'label'});menuButtons.push({id:'govsmode_ai',text:'人机对战',x:cx-mw/2-mg/2,y:startY+28,w:mw,h:mh,type:'govsmode',vsMode:'ai'});menuButtons.push({id:'govsmode_human',text:'双人对战',x:cx+mw/2+mg/2,y:startY+28,w:mw,h:mh,type:'govsmode',vsMode:'human'});
-menuButtons.push({id:'lbl_godiff',text:'人机段位',x:30,y:startY+82,type:'label',disabled:!isAi});var gdiffs=['kyu10','kyu5','dan1','dan3'],gdlabels=['10级','5级','1段','3段'];var gdw=62,gdg=7,gdy=startY+112,gdx=cx-(gdw*4+gdg*3)/2;for(var i=0;i<4;i++)menuButtons.push({id:'godiff_'+gdiffs[i],text:gdlabels[i],x:gdx+gdw/2+i*(gdw+gdg),y:gdy,w:gdw,h:34,type:'godiff',diff:gdiffs[i],disabled:!isAi});
-menuButtons.push({id:'lbl_boardsize',text:'棋盘路数',x:30,y:startY+160,type:'label'});var bw=80,bg2=10,bsizes=[9,13,19],bsy=startY+190,bsx=cx-(bw*3+bg2*2)/2;for(var i=0;i<3;i++)menuButtons.push({id:'gosize_'+bsizes[i],text:bsizes[i]+'路',x:bsx+bw/2+i*(bw+bg2),y:bsy,w:bw,h:36,type:'gosize',size:bsizes[i]});
-menuButtons.push({id:'lbl_komi',text:'贴目 ('+g.komi+'目)',x:30,y:startY+240,type:'label'});menuButtons.push({id:'komi_55',text:'5.5',x:cx-90,y:startY+268,w:80,h:36,type:'komi',komi:5.5});menuButtons.push({id:'komi_65',text:'6.5',x:cx,y:startY+268,w:80,h:36,type:'komi',komi:6.5});menuButtons.push({id:'komi_75',text:'7.5',x:cx+90,y:startY+268,w:80,h:36,type:'komi',komi:7.5});
-menuButtons.push({id:'start_go',text:'进入游戏',x:cx,y:H-100,w:160,h:50,type:'btn_large'});menuButtons.push({id:'back',text:'返回',x:cx,y:H-40,w:120,h:35,type:'btn'});}
-/* ===== 触摸 ===== */
-function handleTouch(e){var touch=e.touches?e.touches[0]:e;var x=touch.clientX,y=touch.clientY;if(gameState==='menu')handleMenuTouch(x,y);else if(gameState==='game')handleGameTouch(x,y);}
-function handleTouchMove(e){var touch=e.touches?e.touches[0]:e;var x=touch.clientX,y=touch.clientY;hoveredBtn=getHoveredBtn(x,y);if(gameState==='game')handleGameHover(x,y);}
-function handleTouchEnd(e){hoveredBtn=null;}
-function getHoveredBtn(x,y){for(var i=0;i<menuButtons.length;i++){var b=menuButtons[i];if(!b.w||!b.h)continue;if(x>=b.x-b.w/2&&x<=b.x+b.w/2&&y>=b.y-b.h/2&&y<=b.y+b.h/2)return b;}return null;}
-function handleMenuTouch(x,y){for(var i=0;i<menuButtons.length;i++){var b=menuButtons[i];if(!b.w)continue;if(x>=b.x-b.w/2&&x<=b.x+b.w/2&&y>=b.y-b.h/2&&y<=b.y+b.h/2){onMenuBtn(b.id,b);break;}}}
-function onMenuBtn(id,btn){var s=settings.normalMode,g=settings.general,go=settings.goMode;
-if(id==='mode_normal'){gameType='gomoku';initCreateGame();}
-else if(id==='mode_go'){gameType='go';initCreateGo();}
-else if(id==='mode_multi'){}
-else if(id==='settings'){initSettings();}
-else if(id==='back'){initMenu();}
-else if(id==='start_game'){gameState='game';initGame();}
-else if(id==='start_go'){gameState='game';initGoGame();}
-else if(btn.type==='vsmode'){s.vsMode=btn.vsMode;initCreateGame();}
-else if(btn.type==='govsmode'){go.vsMode=btn.vsMode;initCreateGo();}
-else if(btn.type==='godiff'){if(go.vsMode==='ai'){go.difficulty=btn.diff;initCreateGo();}}
-else if(btn.type==='gosize'){go.boardSize=btn.size;initCreateGo();}
-else if(btn.type==='komi'){go.komi=btn.komi;initCreateGo();}
-else if(btn.type==='diff'){if(s.vsMode==='ai'){s.difficulty=btn.diff;initCreateGame();}}
-else if(btn.type==='color'){s.playerColor=btn.color;initCreateGame();}
-else if(id==='timer_on'){s.countdown=true;initCreateGame();}
-else if(id==='timer_off'){s.countdown=false;initCreateGame();}
-else if(id==='sound_on'){g.sound=true;initSettings();}else if(id==='sound_off'){g.sound=false;initSettings();}
-else if(id==='music_on'){g.music=true;initSettings();}else if(id==='music_off'){g.music=false;initSettings();}
-else if(id==='vibe_on'){g.vibration=true;initSettings();}else if(id==='vibe_off'){g.vibration=false;initSettings();}}
-/* ===== 游戏触摸 ===== */
-function handleGameHover(x,y){var chatY=H-LAYOUT.chatH;var actionY=chatY-LAYOUT.actionH;hoveredBtn=null;if(y>=actionY&&y<chatY){var cx=W/2;var confirmX=cx-80,confirmY=actionY+5,confirmW=160,confirmH=50;if(x>=confirmX&&x<=confirmX+confirmW&&y>=confirmY&&y<=confirmY+confirmH){hoveredBtn={id:'confirm'};return;}var btnW=80,btnH=36,btnGap=12;var totalW=btnW*3+btnGap*2;var startX=cx-totalW/2;var btnY=actionY+60;for(var i=0;i<3;i++){var bx=startX+i*(btnW+btnGap);if(x>=bx&&x<=bx+btnW&&y>=btnY&&y<=btnY+btnH){hoveredBtn={id:['resign','pass','undo'][i]};return;}}}}
-function handleGameTouch(x,y){var chatY=H-LAYOUT.chatH;var actionY=chatY-LAYOUT.actionH;if(y>=chatY)return;if(gameOver){var btnY=H*0.52;if(x>=W/2-75&&x<=W/2+75&&y>=btnY&&y<=btnY+48){initGame();return;}if(x>=W/2-55&&x<=W/2+55&&y>=btnY+58&&y<=btnY+98){backToMenu();}return;}if(y>=actionY){handleActionTouch(x,y,actionY);return;}if(gameType==='go'){handleGoTouch(x,y);return;}var s=settings.normalMode;if(s.vsMode==='ai'&&currentPlayer!==s.playerColor)return;var bL=LAYOUT.boardLeft,bT=LAYOUT.boardTop;var bx=x-bL,by=y-bT;var bs2=CONFIG.CELL_SIZE*(CONFIG.BOARD_SIZE-1);if(bx<-CONFIG.PIECE_RADIUS||by<-CONFIG.PIECE_RADIUS||bx>bs2+CONFIG.PIECE_RADIUS||by>bs2+CONFIG.PIECE_RADIUS)return;var gx=Math.round(bx/CONFIG.CELL_SIZE);var gy=Math.round(by/CONFIG.CELL_SIZE);if(gx<0||gx>=CONFIG.BOARD_SIZE||gy<0||gy>=CONFIG.BOARD_SIZE)return;if(board[gy][gx]!==0)return;previewX=gx;previewY=gy;canPlace=true;}
-function handleGoTouch(x,y){var go=settings.goMode;if(go.vsMode==='ai'&&currentPlayer!==1)return;var bL=LAYOUT.boardLeft,bT=LAYOUT.boardTop;var bx=x-bL,by=y-bT;var bs2=CONFIG.CELL_SIZE*(CONFIG.BOARD_SIZE-1);if(bx<-CONFIG.CELL_SIZE/2||by<-CONFIG.CELL_SIZE/2||bx>bs2+CONFIG.CELL_SIZE/2||by>bs2+CONFIG.CELL_SIZE/2)return;var gx=Math.round(bx/CONFIG.CELL_SIZE);var gy=Math.round(by/CONFIG.CELL_SIZE);if(gx<0||gx>=CONFIG.BOARD_SIZE||gy<0||gy>=CONFIG.BOARD_SIZE)return;if(board[gy][gx]!==0)return;previewX=gx;previewY=gy;canPlace=true;}
-function handleActionTouch(x,y,actionY){var cx=W/2;var confirmX=cx-80,confirmY=actionY+5,confirmW=160,confirmH=50;if(x>=confirmX&&x<=confirmX+confirmW&&y>=confirmY&&y<=confirmY+confirmH){if(canPlace)confirmPlace();return;}var btnW=80,btnH=36,btnGap=12;var totalW=btnW*3+btnGap*2;var startX=cx-totalW/2;var btnY=actionY+60;for(var i=0;i<3;i++){var bx=startX+i*(btnW+btnGap);if(x>=bx&&x<=bx+btnW&&y>=btnY&&y<=btnY+btnH){if(i===0)onResign();else if(i===1){if(gameType==='go')onGoPass();else onUndo();}else if(i===2){if(gameType==='go')onUndo();else onDraw();}return;}}}
-/* ===== 五子棋逻辑 ===== */
-function onResign(){var s=settings.normalMode;if(gameType==='go'){var go=settings.goMode;endGame(go.vsMode==='human'?(currentPlayer===1?2:1):2);return;}if(s.vsMode==='human'){endGame(currentPlayer===1?2:1);}else{endGame(s.playerColor===1?2:1);}}
-function onDraw(){}
-function onUndo(){if(gameType==='go'){goUndo();return;}var s=settings.normalMode;if(s.vsMode==='human'){if(moveHistory.length===0)return;var step=moveHistory.pop();board[step.y][step.x]=0;lastMove=moveHistory.length>0?moveHistory[moveHistory.length-1]:null;currentPlayer=step.player;previewX=-1;previewY=-1;canPlace=false;}else{var myColor=s.playerColor;if(moveHistory.length===0)return;var last=moveHistory[moveHistory.length-1];if(last.player!==myColor){if(moveHistory.length<2)return;var aiStep=moveHistory.pop();board[aiStep.y][aiStep.x]=0;var myStep=moveHistory.pop();board[myStep.y][myStep.x]=0;}else{var myStep=moveHistory.pop();board[myStep.y][myStep.x]=0;}lastMove=moveHistory.length>0?moveHistory[moveHistory.length-1]:null;previewX=-1;previewY=-1;canPlace=false;currentPlayer=myColor;isMyTurn=true;}}
-function confirmPlace(){if(!canPlace||previewX<0||previewY<0)return;if(gameType==='go'){goConfirmPlace();return;}var s=settings.normalMode;var myColor=s.vsMode==='human'?currentPlayer:s.playerColor;placePiece(previewX,previewY,myColor);previewX=-1;previewY=-1;canPlace=false;if(checkWin(lastMove.x,lastMove.y,myColor)){endGame(myColor);return;}if(s.vsMode==='human'){currentPlayer=currentPlayer===1?2:1;isMyTurn=true;if(s.countdown){if(currentPlayer===1){playerTime=15;}else{aiTime=15;}}}else{currentPlayer=s.playerColor===1?2:1;isMyTurn=false;playerTime=s.countdown?15:9999;aiTime=s.countdown?15:9999;scheduleAiMove();}}
-function initGame(){if(gameType==='go'){initGoGame();return;}board=[];for(var y=0;y<CONFIG.BOARD_SIZE;y++){board[y]=[];for(var x=0;x<CONFIG.BOARD_SIZE;x++)board[y][x]=0;}var s=settings.normalMode;if(s.playerColor===0)s.playerColor=Math.random()<0.5?1:2;currentPlayer=1;var myColor=s.playerColor;isMyTurn=(s.vsMode==='human')?true:(myColor===1);gameOver=false;winner=null;lastMove=null;moveHistory=[];aiMoveToken++;previewX=-1;previewY=-1;canPlace=false;playerTime=s.countdown?15:9999;aiTime=s.countdown?15:9999;playerTimeoutCount=0;aiTimeoutCount=0;chatMessages=[];if(timerInterval)clearInterval(timerInterval);if(s.countdown){timerInterval=setInterval(function(){if(gameOver){clearInterval(timerInterval);return;}if(s.vsMode==='human'){if(currentPlayer===1){playerTime--;if(playerTime<=0){playerTime=15;playerTimeoutCount++;if(playerTimeoutCount>=3){endGame(2);}else{chatMessages.push('黑方超时('+playerTimeoutCount+'/3)');previewX=-1;previewY=-1;canPlace=false;currentPlayer=2;aiTime=15;}}}else{aiTime--;if(aiTime<=0){aiTime=15;aiTimeoutCount++;if(aiTimeoutCount>=3){endGame(1);}else{chatMessages.push('白方超时('+aiTimeoutCount+'/3)');previewX=-1;previewY=-1;canPlace=false;currentPlayer=1;playerTime=15;}}}}else{if(isMyTurn){playerTime--;if(playerTime<=0){playerTime=15;playerTimeoutCount++;if(playerTimeoutCount>=3){endGame(myColor===1?2:1);}else{onTimeoutSkip();}}}else{aiTime--;if(aiTime<=0){aiTime=15;aiTimeoutCount++;if(aiTimeoutCount>=3){endGame(myColor);}else{aiMove();}}}}},1000);}if(s.vsMode==='ai'&&!isMyTurn)scheduleAiMove();}
-function onTimeoutSkip(){currentPlayer=settings.normalMode.playerColor===1?2:1;isMyTurn=false;playerTime=settings.normalMode.countdown?15:9999;aiTime=settings.normalMode.countdown?15:9999;chatMessages.push('你停了一手('+playerTimeoutCount+'/3)');scheduleAiMove();}
-function placePiece(x,y,player){board[y][x]=player;lastMove={x:x,y:y};moveHistory.push({x:x,y:y,player:player});}
-function checkWin(x,y,player){var dirs=[[1,0],[0,1],[1,1],[1,-1]];for(var d=0;d<dirs.length;d++){var count=1;for(var i=1;i<5;i++){var nx=x+dirs[d][0]*i,ny=y+dirs[d][1]*i;if(nx<0||nx>=CONFIG.BOARD_SIZE||ny<0||ny>=CONFIG.BOARD_SIZE||board[ny][nx]!==player)break;count++;}for(var i=1;i<5;i++){var nx=x-dirs[d][0]*i,ny=y-dirs[d][1]*i;if(nx<0||nx>=CONFIG.BOARD_SIZE||ny<0||ny>=CONFIG.BOARD_SIZE||board[ny][nx]!==player)break;count++;}if(count>=5)return true;}return false;}
-function endGame(w){gameOver=true;winner=w;if(timerInterval)clearInterval(timerInterval);}
-function backToMenu(){if(timerInterval)clearInterval(timerInterval);aiMoveToken++;gameState='menu';currentScreen='';previewX=-1;previewY=-1;canPlace=false;hoveredBtn=null;initBoardLayout();initMenu();}
-function scheduleAiMove(){var token=aiMoveToken;setTimeout(function(){if(token===aiMoveToken){if(gameType==='go')goAiMove();else aiMove();}},CONFIG.AI_DELAY);}
-function aiMove(){if(gameOver)return;var myColor=settings.normalMode.playerColor;var aiColor=myColor===1?2:1;var move=findBestMove(aiColor);if(move){placePiece(move.x,move.y,aiColor);if(checkWin(move.x,move.y,aiColor)){endGame(aiColor);return;}currentPlayer=myColor;isMyTurn=true;playerTime=settings.normalMode.countdown?15:9999;aiTime=settings.normalMode.countdown?15:9999;}}
-function findBestMove(aiColor){var maxScore=-1,candidates=[];for(var y=0;y<CONFIG.BOARD_SIZE;y++){for(var x=0;x<CONFIG.BOARD_SIZE;x++){if(board[y][x]===0){var score=evalPoint(x,y,aiColor);if(score>maxScore){maxScore=score;candidates=[{x:x,y:y}];}else if(score===maxScore)candidates.push({x:x,y:y});}}}if(!candidates.length){var c=Math.floor(CONFIG.BOARD_SIZE/2);return{x:c,y:c};}return candidates[Math.floor(Math.random()*candidates.length)];}
-function evalPoint(x,y,aiColor){var score=0,dirs=[[1,0],[0,1],[1,1],[1,-1]];var playerColor=settings.normalMode.playerColor;for(var d=0;d<dirs.length;d++){score+=evalLine(x,y,dirs[d][0],dirs[d][1],aiColor)*1.2;score+=evalLine(x,y,dirs[d][0],dirs[d][1],playerColor);}var c=Math.floor(CONFIG.BOARD_SIZE/2);score+=(CONFIG.BOARD_SIZE*2-Math.abs(x-c)-Math.abs(y-c))*0.3;return score;}
-function evalLine(x,y,dx,dy,player){var count=0,empty=0,blocked=0;for(var i=1;i<=4;i++){var nx=x+dx*i,ny=y+dy*i;if(nx<0||nx>=CONFIG.BOARD_SIZE||ny<0||ny>=CONFIG.BOARD_SIZE){blocked++;break;}if(board[ny][nx]===player)count++;else if(board[ny][nx]===0){empty++;break;}else{blocked++;break;}}for(var i=1;i<=4;i++){var nx=x-dx*i,ny=y-dy*i;if(nx<0||nx>=CONFIG.BOARD_SIZE||ny<0||ny>=CONFIG.BOARD_SIZE){blocked++;break;}if(board[ny][nx]===player)count++;else if(board[ny][nx]===0){empty++;break;}else{blocked++;break;}}if(blocked===2)return 0;if(count>=5)return 1000000;if(count===4)return empty===2?100000:10000;if(count===3)return empty===2?5000:500;if(count===2)return empty===2?200:50;if(count===1&&empty===2)return 10;return 0;}
-/* ===== 围棋逻辑 ===== */
-function initGoGame(){gameType='go';initBoardLayout();board=[];for(var y=0;y<CONFIG.BOARD_SIZE;y++){board[y]=[];for(var x=0;x<CONFIG.BOARD_SIZE;x++)board[y][x]=0;}currentPlayer=1;isMyTurn=true;gameOver=false;winner=null;lastMove=null;moveHistory=[];aiMoveToken++;previewX=-1;previewY=-1;canPlace=false;goCaptured=[0,0];goPassCount=0;goKoPoint=null;goPrevBoardStr='';chatMessages=[];if(timerInterval)clearInterval(timerInterval);}
-function goGetGroup(x,y,player){var visited={};var group=[];var liberties=[];var stack=[{x:x,y:y}];var dirs=[[1,0],[-1,0],[0,1],[0,-1]];while(stack.length){var cur=stack.pop();var key=cur.x+','+cur.y;if(visited[key])continue;visited[key]=true;group.push({x:cur.x,y:cur.y});for(var d=0;d<4;d++){var nx=cur.x+dirs[d][0],ny=cur.y+dirs[d][1];if(nx<0||nx>=CONFIG.BOARD_SIZE||ny<0||ny>=CONFIG.BOARD_SIZE)continue;var nkey=nx+','+ny;if(board[ny][nx]===0&&!visited[nkey]){liberties.push({x:nx,y:ny});visited[nkey]=true;}else if(board[ny][nx]===player&&!visited[nkey]){stack.push({x:nx,y:ny});}}}return{group:group,liberties:liberties};}
-function goRemoveGroup(group){for(var i=0;i<group.length;i++)board[group[i].y][group[i].x]=0;}
-function goBoardStr(){var s='';for(var y=0;y<CONFIG.BOARD_SIZE;y++)for(var x=0;x<CONFIG.BOARD_SIZE;x++)s+=board[y][x];return s;}
-function goIsValidMove(x,y,player){if(board[y][x]!==0)return false;if(goKoPoint&&goKoPoint.x===x&&goKoPoint.y===y)return false;board[y][x]=player;var opponent=player===1?2:1;var captured=[];var dirs=[[1,0],[-1,0],[0,1],[0,-1]];for(var d=0;d<4;d++){var nx=x+dirs[d][0],ny=y+dirs[d][1];if(nx<0||nx>=CONFIG.BOARD_SIZE||ny<0||ny>=CONFIG.BOARD_SIZE)continue;if(board[ny][nx]===opponent){var res=goGetGroup(nx,ny,opponent);if(res.liberties.length===0)captured=captured.concat(res.group);}}var selfRes=goGetGroup(x,y,player);var valid=captured.length>0||selfRes.liberties.length>0;board[y][x]=0;return valid;}
-function goConfirmPlace(){if(!canPlace||previewX<0||previewY<0)return;var x=previewX,y=previewY;previewX=-1;previewY=-1;canPlace=false;if(!goIsValidMove(x,y,currentPlayer)){chatMessages.push('非法落子');return;}var prevStr=goBoardStr();board[y][x]=currentPlayer;var opponent=currentPlayer===1?2:1;var dirs=[[1,0],[-1,0],[0,1],[0,-1]];var totalCap=0;var lastCapGroup=null;for(var d=0;d<4;d++){var nx=x+dirs[d][0],ny=y+dirs[d][1];if(nx<0||nx>=CONFIG.BOARD_SIZE||ny<0||ny>=CONFIG.BOARD_SIZE)continue;if(board[ny][nx]===opponent){var res=goGetGroup(nx,ny,opponent);if(res.liberties.length===0){totalCap+=res.group.length;lastCapGroup=res.group;goRemoveGroup(res.group);}}}goCaptured[currentPlayer-1]+=totalCap;var newStr=goBoardStr();if(totalCap===1&&lastCapGroup){var selfRes=goGetGroup(x,y,currentPlayer);if(selfRes.group.length===1&&selfRes.liberties.length===0){goKoPoint={x:lastCapGroup[0].x,y:lastCapGroup[0].y};}else{goKoPoint=null;}}else{goKoPoint=null;}lastMove={x:x,y:y};moveHistory.push({x:x,y:y,player:currentPlayer,boardSnap:prevStr,captured:totalCap,koPoint:goKoPoint});goPassCount=0;goPrevBoardStr=newStr;currentPlayer=opponent;isMyTurn=true;if(settings.goMode.vsMode==='ai'&&currentPlayer===2){isMyTurn=false;scheduleAiMove();}}
-function onGoPass(){var prevStr=goBoardStr();moveHistory.push({x:-1,y:-1,player:currentPlayer,boardSnap:prevStr,captured:0,koPoint:goKoPoint,isPass:true});goPassCount++;chatMessages.push((currentPlayer===1?'黑':'白')+'方虚手');if(goPassCount>=2){goEndCount();return;}currentPlayer=currentPlayer===1?2:1;isMyTurn=true;if(settings.goMode.vsMode==='ai'&&currentPlayer===2){isMyTurn=false;scheduleAiMove();}}
-function goUndo(){if(moveHistory.length===0)return;var go=settings.goMode;var stepsToUndo=go.vsMode==='ai'?2:1;for(var i=0;i<stepsToUndo&&moveHistory.length>0;i++){var step=moveHistory.pop();if(step.boardSnap!==undefined){var snap=step.boardSnap;var idx=0;for(var y=0;y<CONFIG.BOARD_SIZE;y++)for(var x=0;x<CONFIG.BOARD_SIZE;x++)board[y][x]=parseInt(snap[idx++]);goCaptured[step.player-1]-=step.captured;goKoPoint=step.koPoint||null;goPassCount=0;}}lastMove=moveHistory.length>0&&moveHistory[moveHistory.length-1].x>=0?moveHistory[moveHistory.length-1]:null;currentPlayer=1;isMyTurn=true;previewX=-1;previewY=-1;canPlace=false;}
-function goEndCount(){var bs=CONFIG.BOARD_SIZE;var territory=[[]];for(var y=0;y<bs;y++){territory[y]=[];for(var x=0;x<bs;x++)territory[y][x]=0;}var visited={};for(var y=0;y<bs;y++){for(var x=0;x<bs;x++){if(board[y][x]===0&&!visited[y+','+x]){var region=[];var borders={1:false,2:false};var stack=[{x:x,y:y}];var dirs=[[1,0],[-1,0],[0,1],[0,-1]];while(stack.length){var cur=stack.pop();var key=cur.x+','+cur.y;if(visited[key])continue;visited[key]=true;region.push({x:cur.x,y:cur.y});for(var d=0;d<4;d++){var nx=cur.x+dirs[d][0],ny=cur.y+dirs[d][1];if(nx<0||nx>=bs||ny<0||ny>=bs)continue;if(board[ny][nx]===0&&!visited[nx+','+ny])stack.push({x:nx,y:ny});else if(board[ny][nx]===1)borders[1]=true;else if(board[ny][nx]===2)borders[2]=true;}}var owner=0;if(borders[1]&&!borders[2])owner=1;else if(borders[2]&&!borders[1])owner=2;for(var k=0;k<region.length;k++)territory[region[k].y][region[k].x]=owner;}}}var blackScore=0,whiteScore=settings.goMode.komi;for(var y=0;y<bs;y++)for(var x=0;x<bs;x++){if(board[y][x]===1||territory[y][x]===1)blackScore++;else if(board[y][x]===2||territory[y][x]===2)whiteScore++;}blackScore+=goCaptured[0];whiteScore+=goCaptured[1];gameOver=true;winner=blackScore>whiteScore?1:2;chatMessages.push('黑:'+blackScore.toFixed(1)+' 白:'+whiteScore.toFixed(1));if(timerInterval)clearInterval(timerInterval);}
-function goAiMove(){if(gameOver)return;var aiColor=2;var playerColor=1;var bs=CONFIG.BOARD_SIZE;var diff=settings.goMode.difficulty||'kyu10';
-var candidates=[];for(var y=0;y<bs;y++)for(var x=0;x<bs;x++){if(goIsValidMove(x,y,aiColor)){var score=goEvalPoint(x,y,aiColor,playerColor,diff);candidates.push({x:x,y:y,score:score});}}
-candidates.sort(function(a,b){return b.score-a.score;});
-var move=null;if(candidates.length>0){var randomRange={kyu10:Math.min(15,candidates.length),kyu5:Math.min(8,candidates.length),dan1:Math.min(3,candidates.length),dan3:1};var topN=randomRange[diff]||8;move=candidates[Math.floor(Math.random()*topN)];}
-if(move){var prevStr=goBoardStr();board[move.y][move.x]=aiColor;var dirs=[[1,0],[-1,0],[0,1],[0,-1]];var totalCap=0;for(var d=0;d<4;d++){var nx=move.x+dirs[d][0],ny=move.y+dirs[d][1];if(nx<0||nx>=bs||ny<0||ny>=bs)continue;if(board[ny][nx]===playerColor){var res=goGetGroup(nx,ny,playerColor);if(res.liberties.length===0){totalCap+=res.group.length;goRemoveGroup(res.group);}}}goCaptured[1]+=totalCap;goKoPoint=null;lastMove={x:move.x,y:move.y};moveHistory.push({x:move.x,y:move.y,player:aiColor,boardSnap:prevStr,captured:totalCap,koPoint:null});goPassCount=0;currentPlayer=1;isMyTurn=true;}else{onGoPass();}}
-function goEvalPoint(x,y,aiColor,playerColor,diff){var score=0;var bs=CONFIG.BOARD_SIZE;var c=Math.floor(bs/2);
-score+=(bs-Math.abs(x-c)-Math.abs(y-c))*0.3;
-board[y][x]=aiColor;var dirs=[[1,0],[-1,0],[0,1],[0,-1]];
-for(var d=0;d<4;d++){var nx=x+dirs[d][0],ny=y+dirs[d][1];if(nx<0||nx>=bs||ny<0||ny>=bs)continue;
-if(board[ny][nx]===playerColor){var res=goGetGroup(nx,ny,playerColor);var libs=res.liberties.length;if(libs===0)score+=res.group.length*200;else if(libs===1)score+=res.group.length*50;else if(libs===2&&(diff==='dan1'||diff==='dan3'))score+=res.group.length*10;}
-if(board[ny][nx]===aiColor){var res=goGetGroup(nx,ny,aiColor);var libs=res.liberties.length;if(libs===1)score+=res.group.length*80;else if(libs===2)score+=res.group.length*15;}}
-var selfRes=goGetGroup(x,y,aiColor);score+=selfRes.liberties.length*3;
-if(diff==='dan1'||diff==='dan3'){score+=goInfluence(x,y,aiColor)*2;score+=goInfluence(x,y,playerColor)*1.5;}
-board[y][x]=0;return score;}
-function goInfluence(x,y,color){var score=0;var bs=CONFIG.BOARD_SIZE;var dirs=[[1,0],[-1,0],[0,1],[0,-1]];for(var d=0;d<4;d++){for(var step=1;step<=3;step++){var nx=x+dirs[d][0]*step,ny=y+dirs[d][1]*step;if(nx<0||nx>=bs||ny<0||ny>=bs)break;if(board[ny][nx]===color)score+=(4-step)*2;else if(board[ny][nx]!==0)break;}}return score;}
-/* ===== 游戏循环 ===== */
-function gameLoop(){ctx.clearRect(0,0,W,H);if(gameState==='menu'){if(currentScreen==='main_menu')drawMenu();else if(currentScreen==='settings')drawSettings();else if(currentScreen==='create_game')drawCreateGame();else if(currentScreen==='create_go')drawCreateGo();}else if(gameState==='game'){drawGame();}requestAnimationFrame(gameLoop);}
-/* ===== 绘制 ===== */
-function drawTopBar(){ctx.fillStyle='rgba(26,26,46,0.95)';ctx.fillRect(0,0,W,LAYOUT.topH);ctx.fillStyle='#fff';ctx.font=(W*0.035)+'px Arial';ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText(currentTime,W-12,LAYOUT.topH/2);}
-function drawMenu(){var g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#1a1a2e');g.addColorStop(1,'#16213e');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);drawTopBar();ctx.fillStyle='#e94560';ctx.font='bold '+(W*0.1)+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('棋棋',W/2,H*0.15);ctx.fillStyle='#9a8c98';ctx.font=(W*0.03)+'px Arial';ctx.fillText('Board Game',W/2,H*0.21);for(var i=0;i<menuButtons.length;i++){var isHov=hoveredBtn&&hoveredBtn.id===menuButtons[i].id;drawDarkBtn(menuButtons[i],isHov);}}
-function drawSettings(){ctx.fillStyle='#f5f5f5';ctx.fillRect(0,0,W,H);drawTopBar();ctx.fillStyle='#333';ctx.font='bold '+(W*0.06)+'px Arial';ctx.textAlign='center';ctx.fillText('设置',W/2,LAYOUT.topH+30);for(var i=0;i<menuButtons.length;i++){var b=menuButtons[i];var isHov=hoveredBtn&&hoveredBtn.id===b.id;if(b.type==='label'){ctx.fillStyle='#666';ctx.font=(W*0.04)+'px Arial';ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(b.text,b.x,b.y);}else if(b.type==='toggle')drawToggleBtn(b,isHov);else if(b.type==='btn')drawSmallBtn(b,isHov);}}
-function drawCreateGame(){ctx.fillStyle='#f5f5f5';ctx.fillRect(0,0,W,H);drawTopBar();ctx.fillStyle='#333';ctx.font='bold '+(W*0.06)+'px Arial';ctx.textAlign='center';ctx.fillText('创建对局',W/2,LAYOUT.topH+30);for(var i=0;i<menuButtons.length;i++){var b=menuButtons[i];var isHov=hoveredBtn&&hoveredBtn.id===b.id;if(b.type==='label'){ctx.fillStyle=b.disabled?'#bbb':'#666';ctx.font=(W*0.04)+'px Arial';ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(b.text,b.x,b.y);}else if(b.type==='vsmode')drawOptionBtn(b,settings.normalMode.vsMode===b.vsMode,isHov,false);else if(b.type==='diff')drawOptionBtn(b,settings.normalMode.difficulty===b.diff,isHov,b.disabled);else if(b.type==='color')drawOptionBtn(b,settings.normalMode.playerColor===b.color,isHov,b.disabled);else if(b.type==='toggle')drawToggleBtn(b,isHov);else if(b.type==='btn')drawSmallBtn(b,isHov);else if(b.type==='btn_large')drawLargeBtn(b,isHov);}}
-function drawCreateGo(){ctx.fillStyle='#f5f5f5';ctx.fillRect(0,0,W,H);drawTopBar();ctx.fillStyle='#333';ctx.font='bold '+(W*0.06)+'px Arial';ctx.textAlign='center';ctx.fillText('围棋对局',W/2,LAYOUT.topH+30);var go=settings.goMode;for(var i=0;i<menuButtons.length;i++){var b=menuButtons[i];var isHov=hoveredBtn&&hoveredBtn.id===b.id;if(b.type==='label'){ctx.fillStyle=b.disabled?'#bbb':'#666';ctx.font=(W*0.04)+'px Arial';ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(b.text,b.x,b.y);}else if(b.type==='govsmode')drawOptionBtn(b,go.vsMode===b.vsMode,isHov,false);else if(b.type==='godiff')drawOptionBtn(b,go.difficulty===b.diff,isHov,b.disabled);else if(b.type==='gosize')drawOptionBtn(b,go.boardSize===b.size,isHov,false);else if(b.type==='komi')drawOptionBtn(b,go.komi===b.komi,isHov,false);else if(b.type==='btn')drawSmallBtn(b,isHov);else if(b.type==='btn_large')drawLargeBtn(b,isHov);}}
-function drawOptionBtn(b,isActive,isHov,disabled){if(disabled){ctx.fillStyle='#f0f0f0';roundRect(ctx,b.x-b.w/2,b.y-b.h/2,b.w,b.h,8);ctx.fill();ctx.strokeStyle='#e0e0e0';ctx.lineWidth=1.5;roundRect(ctx,b.x-b.w/2,b.y-b.h/2,b.w,b.h,8);ctx.stroke();ctx.fillStyle='#ccc';ctx.font=(W*0.035)+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(b.text,b.x,b.y);return;}ctx.fillStyle=isActive?'#e94560':isHov?'#f0f0f0':'#fff';roundRect(ctx,b.x-b.w/2,b.y-b.h/2,b.w,b.h,8);ctx.fill();ctx.strokeStyle=isActive?'#e94560':isHov?'#e94560':'#ddd';ctx.lineWidth=isHov?2.5:1.5;roundRect(ctx,b.x-b.w/2,b.y-b.h/2,b.w,b.h,8);ctx.stroke();ctx.fillStyle=isActive?'#fff':isHov?'#e94560':'#666';ctx.font=(W*0.035)+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(b.text,b.x,b.y);}
-function drawDarkBtn(b,isHov){var bg=ctx.createLinearGradient(b.x-b.w/2,0,b.x+b.w/2,0);bg.addColorStop(0,isHov?'#4a4e69':'#3a3e59');bg.addColorStop(1,isHov?'#2d2d4a':'#22223b');ctx.fillStyle=bg;roundRect(ctx,b.x-b.w/2,b.y-b.h/2,b.w,b.h,12);ctx.fill();ctx.strokeStyle=isHov?'#e94560':'#4a4e69';ctx.lineWidth=isHov?3:2;roundRect(ctx,b.x-b.w/2,b.y-b.h/2,b.w,b.h,12);ctx.stroke();ctx.fillStyle='#fff';ctx.font='bold '+(W*0.04)+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(b.text,b.x,b.y);}
-function drawSmallBtn(b,isHov){ctx.fillStyle=isHov?'#555':'#666';roundRect(ctx,b.x-b.w/2,b.y-b.h/2,b.w,b.h,8);ctx.fill();ctx.fillStyle='#fff';ctx.font=(W*0.04)+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(b.text,b.x,b.y);}
-function drawLargeBtn(b,isHov){ctx.fillStyle=isHov?'#d63850':'#e94560';roundRect(ctx,b.x-b.w/2,b.y-b.h/2,b.w,b.h,12);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold '+(W*0.045)+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(b.text,b.x,b.y);}
-function drawToggleBtn(b,isHov){ctx.fillStyle=b.isOn?'#e94560':isHov?'#f5f5f5':'#fff';roundRect(ctx,b.x-b.w/2,b.y-b.h/2,b.w,b.h,8);ctx.fill();ctx.strokeStyle=b.isOn?'#e94560':isHov?'#e94560':'#ddd';ctx.lineWidth=isHov?2.5:1.5;roundRect(ctx,b.x-b.w/2,b.y-b.h/2,b.w,b.h,8);ctx.stroke();ctx.fillStyle=b.isOn?'#fff':isHov?'#e94560':'#666';ctx.font=(W*0.035)+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(b.text,b.x,b.y);}
-function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
-function drawGame(){if(gameType==='go'){ctx.fillStyle='#C8A96E';ctx.fillRect(0,0,W,H);}else{ctx.fillStyle='#E5D4B3';ctx.fillRect(0,0,W,H);}drawTopBar();drawPlayerInfo();drawBoard();drawPieces();drawActionArea();drawChatArea();if(gameOver)drawGameOver();}
-function drawPlayerInfo(){var topH=LAYOUT.topH,infoY=topH+45;var leftX=W*0.15,rightX=W*0.85;var s=gameType==='go'?settings.goMode:settings.normalMode;var blackActive=currentPlayer===1;var whiteActive=currentPlayer===2;
-if(blackActive){ctx.strokeStyle='#ffd700';ctx.lineWidth=3;ctx.beginPath();ctx.arc(leftX,infoY,15,0,Math.PI*2);ctx.stroke();}
-ctx.fillStyle='#222';ctx.beginPath();ctx.arc(leftX,infoY,12,0,Math.PI*2);ctx.fill();ctx.fillStyle=blackActive?'#ffd700':'#888';ctx.font='bold 10px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('黑',leftX,infoY);
-if(whiteActive){ctx.strokeStyle='#ffd700';ctx.lineWidth=3;ctx.beginPath();ctx.arc(rightX,infoY,15,0,Math.PI*2);ctx.stroke();}
-ctx.fillStyle='#f5f5f5';ctx.strokeStyle='#aaa';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(rightX,infoY,12,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle=whiteActive?'#ffd700':'#888';ctx.font='bold 10px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('白',rightX,infoY);
-if(gameType==='go'){ctx.fillStyle='#555';ctx.font=(W*0.028)+'px Arial';ctx.textAlign='left';ctx.fillText('提:'+goCaptured[0],leftX-10,infoY+18);ctx.textAlign='right';ctx.fillText('提:'+goCaptured[1],rightX+10,infoY+18);}
-ctx.fillStyle='#555';ctx.font=(W*0.032)+'px Arial';ctx.textAlign='center';var tip;if(gameType==='go'){tip=currentPlayer===1?(s.vsMode==='ai'?'轮到你落子':'黑方落子'):'白方落子';}else if(s.vsMode==='human'){tip=currentPlayer===1?'黑方落子':'白方落子';}else{tip=isMyTurn?'轮到你落子':'人机思考中...';}ctx.fillText(tip,W/2,infoY);}
-function drawBoard(){var bL=LAYOUT.boardLeft,bT=LAYOUT.boardTop;var bs=CONFIG.BOARD_SIZE;var cs=CONFIG.CELL_SIZE;var lineLen=cs*(bs-1);var isGo=gameType==='go';var boardColor=isGo?'#C8A96E':'#DEB887';var lineColor=isGo?'#4A2C0A':'#8B4513';
-ctx.fillStyle=boardColor;ctx.fillRect(bL-cs*0.5,bT-cs*0.5,lineLen+cs,lineLen+cs);
-ctx.strokeStyle=lineColor;ctx.lineWidth=isGo?1.2:1;
-for(var i=0;i<bs;i++){var p=Math.round(i*cs);ctx.beginPath();ctx.moveTo(bL,bT+p);ctx.lineTo(bL+lineLen,bT+p);ctx.stroke();ctx.beginPath();ctx.moveTo(bL+p,bT);ctx.lineTo(bL+p,bT+lineLen);ctx.stroke();}
-ctx.lineWidth=isGo?2:1.5;ctx.strokeRect(bL,bT,lineLen,lineLen);
-var stars;if(bs===19)stars=[[3,3],[3,9],[3,15],[9,3],[9,9],[9,15],[15,3],[15,9],[15,15]];else if(bs===13)stars=[[3,3],[3,9],[9,3],[9,9],[6,6]];else stars=[[2,2],[2,6],[6,2],[6,6],[4,4]];ctx.fillStyle=lineColor;for(var i=0;i<stars.length;i++){ctx.beginPath();ctx.arc(bL+stars[i][0]*cs,bT+stars[i][1]*cs,cs*0.13,0,Math.PI*2);ctx.fill();}}
-function drawPieces(){var bL=LAYOUT.boardLeft,bT=LAYOUT.boardTop;var cs=CONFIG.CELL_SIZE,r=CONFIG.PIECE_RADIUS;for(var py=0;py<CONFIG.BOARD_SIZE;py++){for(var px=0;px<CONFIG.BOARD_SIZE;px++){var px2=bL+px*cs,py2=bT+py*cs;if(board[py][px]!==0){ctx.fillStyle='rgba(0,0,0,0.4)';ctx.beginPath();ctx.arc(px2+2,py2+2,r,0,Math.PI*2);ctx.fill();var grad=ctx.createRadialGradient(px2-r*0.3,py2-r*0.3,0,px2,py2,r);if(board[py][px]===1){grad.addColorStop(0,'#444');grad.addColorStop(1,'#111');}else{grad.addColorStop(0,'#ffffff');grad.addColorStop(1,'#e0e0e0');}ctx.fillStyle=grad;ctx.beginPath();ctx.arc(px2,py2,r,0,Math.PI*2);ctx.fill();if(board[py][px]===2){ctx.strokeStyle='#bbb';ctx.lineWidth=0.8;ctx.stroke();}if(lastMove&&lastMove.x===px&&lastMove.y===py){ctx.strokeStyle='#e94560';ctx.lineWidth=2;ctx.beginPath();ctx.arc(px2,py2,r*0.35,0,Math.PI*2);ctx.stroke();}}else if(previewX===px&&previewY===py){var previewColor=gameType==='go'?currentPlayer:(settings.normalMode.vsMode==='human'?currentPlayer:settings.normalMode.playerColor);ctx.strokeStyle=previewColor===1?'rgba(0,0,0,0.55)':'rgba(220,220,220,0.9)';ctx.lineWidth=2;ctx.setLineDash([3,3]);ctx.beginPath();ctx.arc(px2,py2,r,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);}}}}
-function drawActionArea(){var chatY=H-LAYOUT.chatH;var actionY=chatY-LAYOUT.actionH;var cx=W/2;ctx.fillStyle='#eee';ctx.fillRect(0,actionY,W,LAYOUT.actionH);ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,actionY);ctx.lineTo(W,actionY);ctx.stroke();var btnW=160,btnH=50,btnX=cx-btnW/2,btnY=actionY+5;var isHov=hoveredBtn&&hoveredBtn.id==='confirm';ctx.fillStyle=canPlace?(isHov?'#d63850':'#e94560'):'#ccc';roundRect(ctx,btnX,btnY,btnW,btnH,10);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold '+(W*0.042)+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('确认落子',cx,btnY+btnH/2);var abW=80,abH=36,abGap=12;var totalW=abW*3+abGap*2;var abStartX=cx-totalW/2;var abY=actionY+60;var labels=gameType==='go'?['认输','虚手','悔棋']:['认输','悔棋','求和'];var btnIds=gameType==='go'?['resign','pass','undo']:['resign','undo','draw'];for(var i=0;i<3;i++){var bx=abStartX+i*(abW+abGap);var isH=hoveredBtn&&hoveredBtn.id===btnIds[i];ctx.fillStyle=isH?'#555':'#777';roundRect(ctx,bx,abY,abW,abH,6);ctx.fill();ctx.fillStyle=isH?'#fff':'#ddd';ctx.font=(W*0.032)+'px Arial';ctx.fillText(labels[i],bx+abW/2,abY+abH/2);}}
-function drawChatArea(){var chatY=H-LAYOUT.chatH;ctx.fillStyle='#fff';ctx.fillRect(0,chatY,W,LAYOUT.chatH);ctx.strokeStyle='#e0e0e0';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,chatY);ctx.lineTo(W,chatY);ctx.stroke();ctx.fillStyle='#aaa';ctx.font=(W*0.028)+'px Arial';ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText('聊天',12,chatY+16);var msgY=chatY+32;for(var i=Math.max(0,chatMessages.length-2);i<chatMessages.length;i++){ctx.fillStyle='#333';ctx.font=(W*0.028)+'px Arial';ctx.fillText(chatMessages[i],12,msgY);msgY+=22;}ctx.fillStyle='#f5f5f5';roundRect(ctx,10,chatY+60,W-20,25,6);ctx.fill();ctx.strokeStyle='#e0e0e0';ctx.lineWidth=1;roundRect(ctx,10,chatY+60,W-20,25,6);ctx.stroke();ctx.fillStyle='#bbb';ctx.font=(W*0.03)+'px Arial';ctx.fillText('输入消息...',18,chatY+73);}
-function drawGameOver(){ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(0,0,W,H);var msg,color,sub='';if(gameType==='go'){msg=winner===1?'黑方胜!':'白方胜!';color='#ffd700';if(chatMessages.length>0)sub=chatMessages[chatMessages.length-1];}else{var s=settings.normalMode;if(s.vsMode==='human'){msg=winner===1?'黑方胜!':'白方胜!';color='#ffd700';}else{var myColor=s.playerColor;msg=winner===myColor?'你赢了!':'你输了!';color=winner===myColor?'#ffd700':'#e94560';}}ctx.fillStyle=color;ctx.font='bold '+(W*0.13)+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(msg,W/2,H*0.36);if(sub){ctx.fillStyle='#fff';ctx.font=(W*0.038)+'px Arial';ctx.fillText(sub,W/2,H*0.46);}var btnW=150,btnH=48,btnY=H*0.52;ctx.fillStyle='#e94560';roundRect(ctx,W/2-btnW/2,btnY,btnW,btnH,10);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold '+(W*0.04)+'px Arial';ctx.fillText('再来一局',W/2,btnY+btnH/2);ctx.fillStyle='#888';roundRect(ctx,W/2-55,btnY+58,110,40,8);ctx.fill();ctx.fillStyle='#fff';ctx.font=(W*0.035)+'px Arial';ctx.fillText('返回菜单',W/2,btnY+78);}
 
+// 导入模块
+var state = require('./js/config.js');
+var utils = require('./js/utils.js');
+var ui = require('./js/ui.js');
+var menu = require('./js/menu.js');
+var gomoku = require('./js/gomoku.js');
+var go = require('./js/go.js');
+var xiangqi = require('./js/xiangqi.js');
+var checkers = require('./js/checkers.js');
+var junqi = require('./js/junqi.js');
+var othello = require('./js/othello.js');
+var touch = require('./js/touch.js');
+
+// ===== 初始化 =====
+function init() {
+  try {
+    state.systemInfo = tt.getSystemInfoSync();
+    state.W = state.systemInfo.windowWidth;
+    state.H = state.systemInfo.windowHeight;
+    state.canvas = tt.createCanvas();
+    state.canvas.width = state.W;
+    state.canvas.height = state.H;
+    state.ctx = state.canvas.getContext('2d');
+
+    menu.initBoardLayout();
+    menu.initMenu();
+
+    tt.onTouchStart(touch.handleTouch);
+    tt.onTouchMove(touch.handleTouchMove);
+    tt.onTouchEnd(touch.handleTouchEnd);
+
+    utils.updateTime();
+    setInterval(utils.updateTime, 1000);
+
+    gameLoop();
+  } catch (e) {
+    console.error('Init error:', e);
+  }
+}
+
+// ===== 游戏循环 =====
+function gameLoop() {
+  var ctx = state.ctx;
+  var W = state.W;
+  var H = state.H;
+
+  ctx.clearRect(0, 0, W, H);
+
+  if (state.gameState === 'menu') {
+    if (state.currentScreen === 'main_menu') {
+      ui.drawMenu();
+    } else if (state.currentScreen === 'settings') {
+      ui.drawSettings();
+    } else if (state.currentScreen === 'create_game') {
+      ui.drawCreateGame();
+    } else if (state.currentScreen === 'create_go') {
+      ui.drawCreateGo();
+    } else if (state.currentScreen === 'create_xiangqi') {
+      ui.drawCreateXiangqi();
+    } else if (state.currentScreen === 'create_checkers') {
+      ui.drawCreateCheckers();
+    } else if (state.currentScreen === 'create_junqi') {
+      ui.drawCreateJunqi();
+    } else if (state.currentScreen === 'create_othello') {
+      ui.drawCreateOthello();
+    }
+  } else if (state.gameState === 'game') {
+    drawGame();
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+// ===== 绘制游戏画面 =====
+function drawGame() {
+  var ctx = state.ctx;
+  var W = state.W;
+  var H = state.H;
+
+  if (state.gameType === 'go') {
+    ctx.fillStyle = '#C8A96E';
+  } else if (state.gameType === 'xiangqi') {
+    ctx.fillStyle = '#D2B48C';
+  } else if (state.gameType === 'checkers') {
+    ctx.fillStyle = '#E8D4B8';
+  } else if (state.gameType === 'junqi') {
+    ctx.fillStyle = '#D2B48C';
+  } else if (state.gameType === 'othello') {
+    ctx.fillStyle = '#1a5c1a';
+  } else {
+    ctx.fillStyle = '#E5D4B3';
+  }
+  ctx.fillRect(0, 0, W, H);
+
+  ui.drawTopBar();
+  drawPlayerInfo();
+  drawBoard();
+  drawPieces();
+  
+  drawActionArea();
+  drawChatArea();
+
+  if (state.gameOver) {
+    ui.drawGameOver();
+  }
+}
+
+// ===== 绘制玩家信息 =====
+function drawPlayerInfo() {
+  var ctx = state.ctx;
+  var W = state.W;
+  var topH = state.LAYOUT.topH;
+  var infoY = topH + 45;
+
+  var leftX = W * 0.15;
+  var rightX = W * 0.85;
+
+  if (state.gameType === 'xiangqi') {
+    // 象棋：红方 vs 黑方
+    var s = state.settings.xiangqiMode;
+    var redActive = state.currentPlayer === 1;
+    var blackActive = state.currentPlayer === 2;
+
+    // 红方
+    if (redActive) {
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(leftX, infoY, 15, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#cc0000';
+    ctx.beginPath();
+    ctx.arc(leftX, infoY, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = redActive ? '#ffd700' : '#888';
+    ctx.font = 'bold 10px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('红', leftX, infoY);
+
+    // 黑方
+    if (blackActive) {
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(rightX, infoY, 15, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath();
+    ctx.arc(rightX, infoY, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = blackActive ? '#ffd700' : '#888';
+    ctx.font = 'bold 10px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('黑', rightX, infoY);
+
+    // 提示文字
+    ctx.fillStyle = '#555';
+    ctx.font = (W * 0.032) + 'px Arial';
+    ctx.textAlign = 'center';
+    var tip = redActive ? '红方落子' : '黑方落子';
+    if (s.vsMode === 'ai') {
+      tip = state.isMyTurn ? '轮到你落子' : '人机思考中...';
+    }
+    ctx.fillText(tip, W / 2, infoY);
+    return;
+  }
+
+  if (state.gameType === 'junqi') {
+    // 军旗：红方 vs 蓝方
+    var s = state.settings.junqiMode;
+    var redActive = state.currentPlayer === 1;
+    var blueActive = state.currentPlayer === 2;
+
+    if (redActive) {
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(leftX, infoY, 15, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#cc0000';
+    ctx.beginPath();
+    ctx.arc(leftX, infoY, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = redActive ? '#ffd700' : '#888';
+    ctx.font = 'bold 10px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('红', leftX, infoY);
+
+    if (blueActive) {
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(rightX, infoY, 15, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#4444ff';
+    ctx.beginPath();
+    ctx.arc(rightX, infoY, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = blueActive ? '#ffd700' : '#888';
+    ctx.font = 'bold 10px Arial';
+    ctx.fillText('蓝', rightX, infoY);
+
+    ctx.fillStyle = '#555';
+    ctx.font = (W * 0.032) + 'px Arial';
+    ctx.textAlign = 'center';
+    var tip = redActive ? '红方行动' : '蓝方行动';
+    if (s.vsMode === 'ai') {
+      tip = state.isMyTurn ? '轮到你行动' : '人机思考中...';
+    }
+    ctx.fillText(tip, W / 2, infoY);
+    return;
+  }
+
+  if (state.gameType === 'othello') {
+    // 黑白棋
+    var s = state.settings.othelloMode;
+    var blackActive = state.currentPlayer === 1;
+    var whiteActive = state.currentPlayer === 2;
+
+    if (blackActive) {
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(leftX, infoY, 15, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#222';
+    ctx.beginPath();
+    ctx.arc(leftX, infoY, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 8px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('黑' + (state.othelloBlackCount || 2), leftX, infoY);
+
+    if (whiteActive) {
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(rightX, infoY, 15, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#888';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(rightX, infoY, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 8px Arial';
+    ctx.fillText('白' + (state.othelloWhiteCount || 2), rightX, infoY);
+
+    ctx.fillStyle = '#555';
+    ctx.font = (W * 0.032) + 'px Arial';
+    ctx.textAlign = 'center';
+    var tip = blackActive ? '黑方落子' : '白方落子';
+    if (s.vsMode === 'ai') {
+      tip = state.isMyTurn ? '轮到你落子' : '人机思考中...';
+    }
+    ctx.fillText(tip, W / 2, infoY);
+    return;
+  }
+
+  var s = state.gameType === 'go' ? state.settings.goMode : state.settings.normalMode;
+  var blackActive = state.currentPlayer === 1;
+  var whiteActive = state.currentPlayer === 2;
+
+  // 黑棋
+  if (blackActive) {
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(leftX, infoY, 15, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#222';
+  ctx.beginPath();
+  ctx.arc(leftX, infoY, 12, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = blackActive ? '#ffd700' : '#888';
+  ctx.font = 'bold 10px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('黑', leftX, infoY);
+
+  // 白棋
+  if (whiteActive) {
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(rightX, infoY, 15, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#f5f5f5';
+  ctx.strokeStyle = '#aaa';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(rightX, infoY, 12, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = whiteActive ? '#ffd700' : '#888';
+  ctx.font = 'bold 10px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('白', rightX, infoY);
+
+  // 围棋提子数
+  if (state.gameType === 'go') {
+    ctx.fillStyle = '#555';
+    ctx.font = (W * 0.028) + 'px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText('提:' + state.goCaptured[0], leftX - 10, infoY + 18);
+    ctx.textAlign = 'right';
+    ctx.fillText('提:' + state.goCaptured[1], rightX + 10, infoY + 18);
+  }
+
+  // 提示文字
+  ctx.fillStyle = '#555';
+  ctx.font = (W * 0.032) + 'px Arial';
+  ctx.textAlign = 'center';
+
+  var tip;
+  if (state.gameType === 'go') {
+    tip = state.currentPlayer === 1 ? (s.vsMode === 'ai' ? '轮到你落子' : '黑方落子') : '白方落子';
+  } else if (s.vsMode === 'human') {
+    tip = state.currentPlayer === 1 ? '黑方落子' : '白方落子';
+  } else {
+    tip = state.isMyTurn ? '轮到你落子' : '人机思考中...';
+  }
+  ctx.fillText(tip, W / 2, infoY);
+}
+
+// ===== 绘制棋盘 =====
+function drawBoard() {
+  var ctx = state.ctx;
+  var bL = state.LAYOUT.boardLeft;
+  var bT = state.LAYOUT.boardTop;
+  var bs = state.CONFIG.BOARD_SIZE;
+  var cs = state.CONFIG.CELL_SIZE;
+
+  if (state.gameType === 'xiangqi') {
+    // 象棋棋盘：10x9
+    drawXiangqiBoard();
+    return;
+  }
+
+  if (state.gameType === 'checkers') {
+    // 跳棋棋盘：六角星
+    drawCheckersBoard();
+    return;
+  }
+
+  if (state.gameType === 'junqi') {
+    // 军旗棋盘：5x12
+    drawJunqiBoard();
+    return;
+  }
+
+  if (state.gameType === 'othello') {
+    // 黑白棋棋盘：8x8
+    drawOthelloBoard();
+    return;
+  }
+
+  var lineLen = cs * (bs - 1);
+  var isGo = state.gameType === 'go';
+
+  var boardColor = isGo ? '#C8A96E' : '#DEB887';
+  var lineColor = isGo ? '#4A2C0A' : '#8B4513';
+
+  ctx.fillStyle = boardColor;
+  ctx.fillRect(bL - cs * 0.5, bT - cs * 0.5, lineLen + cs, lineLen + cs);
+
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = isGo ? 1.2 : 1;
+
+  for (var i = 0; i < bs; i++) {
+    var p = Math.round(i * cs);
+    ctx.beginPath();
+    ctx.moveTo(bL, bT + p);
+    ctx.lineTo(bL + lineLen, bT + p);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bL + p, bT);
+    ctx.lineTo(bL + p, bT + lineLen);
+    ctx.stroke();
+  }
+
+  ctx.lineWidth = isGo ? 2 : 1.5;
+  ctx.strokeRect(bL, bT, lineLen, lineLen);
+
+  // 星位
+  var stars;
+  if (bs === 19) {
+    stars = [[3, 3], [3, 9], [3, 15], [9, 3], [9, 9], [9, 15], [15, 3], [15, 9], [15, 15]];
+  } else if (bs === 13) {
+    stars = [[3, 3], [3, 9], [9, 3], [9, 9], [6, 6]];
+  } else {
+    stars = [[2, 2], [2, 6], [6, 2], [6, 6], [4, 4]];
+  }
+
+  ctx.fillStyle = lineColor;
+  for (var i = 0; i < stars.length; i++) {
+    ctx.beginPath();
+    ctx.arc(bL + stars[i][0] * cs, bT + stars[i][1] * cs, cs * 0.13, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ===== 绘制象棋棋盘 =====
+function drawXiangqiBoard() {
+  var ctx = state.ctx;
+  var bL = state.LAYOUT.boardLeft;
+  var bT = state.LAYOUT.boardTop;
+  var cs = state.CONFIG.CELL_SIZE;
+
+  // 象棋棋盘：10行9列
+  var rows = 10, cols = 9;
+  var lineLen = cs * (cols - 1);
+  var boardH = cs * (rows - 1);
+
+  ctx.fillStyle = '#D2B48C';
+  ctx.fillRect(bL, bT, lineLen, boardH);
+
+  ctx.strokeStyle = '#8B4513';
+  ctx.lineWidth = 1;
+
+  // 绘制网格线
+  for (var i = 0; i < rows; i++) {
+    ctx.beginPath();
+    ctx.moveTo(bL, bT + i * cs);
+    ctx.lineTo(bL + lineLen, bT + i * cs);
+    ctx.stroke();
+  }
+  for (var i = 0; i < cols; i++) {
+    ctx.beginPath();
+    ctx.moveTo(bL + i * cs, bT);
+    ctx.lineTo(bL + i * cs, bT + boardH);
+    ctx.stroke();
+  }
+
+  // 绘制外框
+  ctx.lineWidth = 2;
+  ctx.strokeRect(bL, bT, lineLen, boardH);
+
+  // 绘制河（楚河汉界）
+  var riverY = bT + 4.5 * cs;
+  
+  // 河的虚线
+  ctx.strokeStyle = '#8B4513';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([5, 5]);
+  ctx.beginPath();
+  ctx.moveTo(bL, riverY);
+  ctx.lineTo(bL + lineLen, riverY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 楚河汉界文字
+  ctx.fillStyle = '#8B4513';
+  ctx.font = 'bold ' + (cs * 0.5) + 'px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  
+  // 左边"楚"
+  ctx.fillText('楚', bL + lineLen * 0.25, riverY);
+  // 右边"汉"
+  ctx.fillText('汉', bL + lineLen * 0.75, riverY);
+  
+  // 中间"河"和"界"
+  ctx.font = (cs * 0.35) + 'px Arial';
+  ctx.fillText('河', bL + lineLen * 0.45, riverY - cs * 0.25);
+  ctx.fillText('界', bL + lineLen * 0.55, riverY + cs * 0.25);
+
+  // 绘制宫（九宫格）
+  ctx.strokeStyle = '#8B4513';
+  ctx.lineWidth = 1;
+  // 红方宫（下方）
+  ctx.beginPath();
+  ctx.moveTo(bL + 3 * cs, bT);
+  ctx.lineTo(bL + 5 * cs, bT + 2 * cs);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(bL + 5 * cs, bT);
+  ctx.lineTo(bL + 3 * cs, bT + 2 * cs);
+  ctx.stroke();
+
+  // 黑方宫（上方）
+  ctx.beginPath();
+  ctx.moveTo(bL + 3 * cs, bT + 9 * cs);
+  ctx.lineTo(bL + 5 * cs, bT + 7 * cs);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(bL + 5 * cs, bT + 9 * cs);
+  ctx.lineTo(bL + 3 * cs, bT + 7 * cs);
+  ctx.stroke();
+}
+
+// ===== 绘制跳棋棋盘（正六角星形，17行） =====
+function drawCheckersBoard() {
+  var ctx = state.ctx;
+  var bL = state.LAYOUT.boardLeft;
+  var bT = state.LAYOUT.boardTop;
+  var cs = state.CONFIG.CELL_SIZE;
+
+  // 每一行的点位数
+  var ROW_COUNTS = [1, 2, 3, 4, 13, 12, 11, 10, 9, 10, 11, 12, 13, 4, 3, 2, 1];
+
+  // 绘制跳棋棋盘
+  ctx.fillStyle = '#E8D4B8';
+  ctx.strokeStyle = '#8B6F47';
+  ctx.lineWidth = 1;
+
+  for (var y = 0; y < 17; y++) {
+    var count = ROW_COUNTS[y];
+    var startCol = Math.floor((13 - count) / 2);
+    for (var i = 0; i < count; i++) {
+      var x = startCol + i;
+      // 六边形网格坐标转换为屏幕坐标
+      var px = bL + x * cs + (y % 2) * cs / 2;
+      var py = bT + y * cs * 0.866;
+
+      // 绘制六边形格子
+      ctx.beginPath();
+      ctx.arc(px, py, cs * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+}
+
+// ===== 绘制棋子 =====
+function drawPieces() {
+  var ctx = state.ctx;
+  var bL = state.LAYOUT.boardLeft;
+  var bT = state.LAYOUT.boardTop;
+  var cs = state.CONFIG.CELL_SIZE;
+
+  if (state.gameType === 'xiangqi') {
+    drawXiangqiPieces();
+    return;
+  }
+
+  if (state.gameType === 'checkers') {
+    drawCheckersPieces();
+    return;
+  }
+
+  if (state.gameType === 'junqi') {
+    drawJunqiPieces();
+    return;
+  }
+
+  if (state.gameType === 'othello') {
+    drawOthelloPieces();
+    return;
+  }
+
+  var r = state.CONFIG.PIECE_RADIUS;
+  var bs = state.CONFIG.BOARD_SIZE;
+
+  for (var py = 0; py < bs; py++) {
+    for (var px = 0; px < bs; px++) {
+      var px2 = bL + px * cs;
+      var py2 = bT + py * cs;
+
+      if (state.board[py][px] !== 0) {
+        // 阴影 - 更不透明
+        ctx.fillStyle = 'rgba(0,0,0,0.85)';
+        ctx.beginPath();
+        ctx.arc(px2 + 2, py2 + 2, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 棋子 - 更鲜明的颜色
+        var grad = ctx.createRadialGradient(px2 - r * 0.3, py2 - r * 0.3, 0, px2, py2, r);
+        if (state.board[py][px] === 1) {
+          grad.addColorStop(0, '#333');
+          grad.addColorStop(1, '#000');
+        } else {
+          grad.addColorStop(0, '#fff');
+          grad.addColorStop(1, '#ccc');
+        }
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(px2, py2, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (state.board[py][px] === 2) {
+          ctx.strokeStyle = '#888';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+
+        // 最后一手标记
+        if (state.lastMove && state.lastMove.x === px && state.lastMove.y === py) {
+          ctx.strokeStyle = '#e94560';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(px2, py2, r * 0.35, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      } else if (state.previewX === px && state.previewY === py) {
+        // 预览 - 显示当前落子方的颜色
+        var g = state.settings.goMode;
+        var previewColor;
+        if (state.gameType === 'go') {
+          previewColor = g.vsMode === 'human' ? state.currentPlayer : g.playerColor;
+        } else {
+          previewColor = state.settings.normalMode.vsMode === 'human' ? state.currentPlayer : state.settings.normalMode.playerColor;
+        }
+
+        // 黑棋预览用深色，白棋预览用浅色
+        ctx.strokeStyle = previewColor === 1 ? 'rgba(30,30,30,0.85)' : 'rgba(250,250,250,0.95)';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.arc(px2, py2, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+  }
+
+  // 围棋势力范围
+  if (state.goShowTerritory && state.gameType === 'go') {
+    go.drawGoInfluence();
+    drawTerritoryScores();
+  }
+}
+
+// ===== 绘制象棋棋子 =====
+function drawXiangqiPieces() {
+  var ctx = state.ctx;
+  var bL = state.LAYOUT.boardLeft;
+  var bT = state.LAYOUT.boardTop;
+  var cs = state.CONFIG.CELL_SIZE;
+  var xiangqi = require('./js/xiangqi.js');
+
+  for (var y = 0; y < 10; y++) {
+    for (var x = 0; x < 9; x++) {
+      var piece = state.board[y][x];
+      if (piece === 0) continue;
+
+      var px = bL + x * cs;
+      var py = bT + y * cs;
+      var color = Math.floor(piece / 10); // 1=红, 2=黑
+      var type = piece % 10;
+      var name = xiangqi.xiangqiPieceName(piece);
+
+      // 棋子圆形
+      var radius = cs * 0.35;
+
+      // 检查是否被选中
+      var isSelected = state.selectedPiece && state.selectedPiece.x === x && state.selectedPiece.y === y;
+
+      // 如果被选中，棋子抬起（向上移动）
+      if (isSelected) {
+        py -= cs * 0.15;
+      }
+
+      // 阴影
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.beginPath();
+      ctx.arc(px + 1, py + 1, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 棋子背景
+      ctx.fillStyle = color === 1 ? '#cc0000' : '#1a1a1a';
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 棋子边框
+      ctx.strokeStyle = color === 1 ? '#ff6666' : '#666';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 棋子文字
+      ctx.fillStyle = color === 1 ? '#fff' : '#fff';
+      ctx.font = 'bold ' + (cs * 0.4) + 'px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(name, px, py);
+
+      // 选中高亮
+      if (isSelected) {
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(px, py, radius + 5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // 绘制有效移动点（虚线圆圈）
+  if (state.selectedPiece && state.validMoves.length > 0) {
+    for (var i = 0; i < state.validMoves.length; i++) {
+      var move = state.validMoves[i];
+      var mx = bL + move.x * cs;
+      var my = bT + move.y * cs;
+      var moveRadius = cs * 0.25;
+
+      // 虚线圆圈
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(mx, my, moveRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 中心点
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.5)';
+      ctx.beginPath();
+      ctx.arc(mx, my, moveRadius * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+// ===== 绘制跳棋棋子 =====
+function drawCheckersPieces() {
+  var ctx = state.ctx;
+  var bL = state.LAYOUT.boardLeft;
+  var bT = state.LAYOUT.boardTop;
+  var cs = state.CONFIG.CELL_SIZE;
+  var checkers = require('./js/checkers.js');
+
+  // 每一行的点位数
+  var ROW_COUNTS = [1, 2, 3, 4, 13, 12, 11, 10, 9, 10, 11, 12, 13, 4, 3, 2, 1];
+
+  // 棋子颜色
+  var colors = ['#ff0000', '#0000ff', '#ffff00', '#00ff00', '#ff00ff', '#00ffff'];
+
+  for (var row = 0; row < 17; row++) {
+    var count = ROW_COUNTS[row];
+    var startCol = Math.floor((13 - count) / 2);
+    for (var col = startCol; col < startCol + count; col++) {
+      var piece = state.board[row][col];
+      if (piece === 0) continue;
+
+      // 六边形网格坐标转换为屏幕坐标
+      var px = bL + col * cs + (row % 2) * cs / 2;
+      var py = bT + row * cs * 0.866;
+      var radius = cs * 0.35;
+
+      // 检查是否被选中
+      var isSelected = state.selectedPiece && 
+                       state.selectedPiece.row === row && 
+                       state.selectedPiece.col === col;
+
+      // 如果被选中，棋子抬起
+      if (isSelected) {
+        py -= cs * 0.15;
+      }
+
+      // 阴影
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.beginPath();
+      ctx.arc(px + 1, py + 1, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 棋子背景
+      ctx.fillStyle = colors[piece - 1];
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 棋子边框
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 选中高亮
+      if (isSelected) {
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(px, py, radius + 5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // 绘制有效移动点
+  if (state.selectedPiece && state.validMoves.length > 0) {
+    for (var i = 0; i < state.validMoves.length; i++) {
+      var move = state.validMoves[i];
+      var mx = bL + move.col * cs + (move.row % 2) * cs / 2;
+      var my = bT + move.row * cs * 0.866;
+      var moveRadius = cs * 0.2;
+
+      // 虚线圆圈
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(mx, my, moveRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 中心点
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.5)';
+      ctx.beginPath();
+      ctx.arc(mx, my, moveRadius * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+// ===== 绘制领地分数 =====
+function drawTerritoryScores() {
+  if (!state.goEvalResult) return;
+
+  var ctx = state.ctx;
+  var W = state.W;
+  var komi = state.settings.goMode.komi || 6.5;
+  var bsc = state.goEvalResult.blackScore;
+  var ws = state.goEvalResult.whiteScore + komi;
+  var wr = bsc / (bsc + ws) * 100;
+  var lead = ws - bsc;
+  var leadStr = lead > 0 ? '白领先' + lead.toFixed(1) : lead < 0 ? '黑领先' + (-lead).toFixed(1) : '持平';
+
+  var barW = W * 0.55;
+  var barH = 14;
+  var barX = W / 2 - barW / 2;
+  var barY = state.LAYOUT.topH + 45;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ui.roundRect(ctx, barX, barY, barW, barH, barH / 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#1a1a1a';
+  var fillW = barW * (100 - wr) / 100;
+  ui.roundRect(ctx, barX, barY, fillW, barH, barH / 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold ' + (W * 0.024) + 'px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('黑', barX + 18, barY + barH / 2);
+  ctx.fillText('白', barX + barW - 18, barY + barH / 2);
+
+  ctx.fillStyle = '#fff';
+  ctx.font = (W * 0.028) + 'px Arial';
+  ctx.fillText(wr.toFixed(1) + '% ' + leadStr, W / 2, barY - barH * 0.9);
+}
+
+// ===== 绘制操作区域 =====
+function drawActionArea() {
+  var ctx = state.ctx;
+  var W = state.W;
+  var H = state.H;
+  var chatY = H - state.LAYOUT.chatH;
+  var actionY = chatY - state.LAYOUT.actionH;
+  var cx = W / 2;
+
+  ctx.fillStyle = '#eee';
+  ctx.fillRect(0, actionY, W, state.LAYOUT.actionH);
+
+  ctx.strokeStyle = '#ccc';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, actionY);
+  ctx.lineTo(W, actionY);
+  ctx.stroke();
+
+  // 象棋、跳棋、军旗、黑白棋操作按钮
+  if (state.gameType === 'xiangqi' || state.gameType === 'checkers' || state.gameType === 'junqi' || state.gameType === 'othello') {
+    var abW = 80, abH = 36, abGap = 12;
+    var totalW = abW * 3 + abGap * 2;
+    var abStartX = cx - totalW / 2;
+    var abY = actionY + 6;
+    var labels = ['认输', '悔棋', '求和'];
+    var btnIds = ['resign', 'undo', 'draw'];
+
+    for (var i = 0; i < 3; i++) {
+      var bx = abStartX + i * (abW + abGap);
+      var isH = state.hoveredBtn && state.hoveredBtn.id === btnIds[i];
+      ctx.fillStyle = isH ? '#555' : '#777';
+      ui.roundRect(ctx, bx, abY, abW, abH, 6);
+      ctx.fill();
+      ctx.fillStyle = isH ? '#fff' : '#ddd';
+      ctx.font = (W * 0.032) + 'px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(labels[i], bx + abW / 2, abY + abH / 2);
+    }
+    return;
+  }
+
+  // 确认落子按钮
+  var btnW = 140;
+  var btnH = 38;
+  var btnX = cx - btnW / 2;
+  var btnY = actionY + 2;
+  var isHov = state.hoveredBtn && state.hoveredBtn.id === 'confirm';
+
+  ctx.fillStyle = state.canPlace ? (isHov ? '#d63850' : '#e94560') : '#bbb';
+  ui.roundRect(ctx, btnX, btnY, btnW, btnH, 8);
+  ctx.fill();
+
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold ' + (W * 0.033) + 'px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('确认落子', cx, btnY + btnH / 2);
+
+  if (state.gameType === 'go') {
+    // 围棋功能按钮
+    var ebW = 58, ebH = 26, ebGap = 4;
+    var ebY = btnY + btnH + 3;
+    var totalEbW = ebW * 3 + ebGap * 2;
+    var ebStartX = cx - totalEbW / 2;
+    var elabels = ['申请点目', state.goShowTerritory ? '关闭判断' : '局势判断', '悔棋'];
+    var ebtnIds = ['eval', 'predict', 'undo'];
+    var epredictActive = state.goShowTerritory;
+
+    for (var i = 0; i < 3; i++) {
+      var bx = ebStartX + i * (ebW + ebGap);
+      var eisH = state.hoveredBtn && state.hoveredBtn.id === ebtnIds[i];
+      var btnBg;
+
+      if (ebtnIds[i] === 'predict' && epredictActive) {
+        btnBg = eisH ? '#3a7bc8' : '#4a90d9';
+      } else {
+        btnBg = eisH ? '#4a90d9' : '#5ba3e0';
+      }
+
+      ctx.fillStyle = btnBg;
+      ui.roundRect(ctx, bx, ebY, ebW, ebH, 5);
+      ctx.fill();
+
+      if (ebtnIds[i] === 'predict' && epredictActive) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+        ctx.lineWidth = 1.5;
+        ui.roundRect(ctx, bx, ebY, ebW, ebH, 5);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = '#fff';
+      ctx.font = (W * 0.022) + 'px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(elabels[i], bx + ebW / 2, ebY + ebH / 2);
+    }
+
+    // 认输、虚手按钮
+    var rbW = 58, rbH = 26, rbGap = 4;
+    var rbY = ebY + ebH + 3;
+    var rlabels = ['认输', '虚手'];
+    var rbtnIds = ['resign', 'pass'];
+    var totalRbW = rbW * 2 + rbGap;
+    var rbStartX = cx - totalRbW / 2;
+
+    for (var i = 0; i < 2; i++) {
+      var bx = rbStartX + i * (rbW + rbGap);
+      var risH = state.hoveredBtn && state.hoveredBtn.id === rbtnIds[i];
+      ctx.fillStyle = risH ? '#d95555' : '#e06666';
+      ui.roundRect(ctx, bx, rbY, rbW, rbH, 5);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = (W * 0.024) + 'px Arial';
+      ctx.fillText(rlabels[i], bx + rbW / 2, rbY + rbH / 2);
+    }
+  } else {
+    // 五子棋按钮
+    var abW = 80, abH = 36, abGap = 12;
+    var totalW = abW * 3 + abGap * 2;
+    var abStartX = cx - totalW / 2;
+    var abY = btnY + btnH + 6;
+    var labels = ['认输', '悔棋', '求和'];
+    var btnIds = ['resign', 'undo', 'draw'];
+
+    for (var i = 0; i < 3; i++) {
+      var bx = abStartX + i * (abW + abGap);
+      var isH = state.hoveredBtn && state.hoveredBtn.id === btnIds[i];
+      ctx.fillStyle = isH ? '#555' : '#777';
+      ui.roundRect(ctx, bx, abY, abW, abH, 6);
+      ctx.fill();
+      ctx.fillStyle = isH ? '#fff' : '#ddd';
+      ctx.font = (W * 0.032) + 'px Arial';
+      ctx.fillText(labels[i], bx + abW / 2, abY + abH / 2);
+    }
+  }
+}
+
+// ===== 绘制聊天区域 =====
+function drawChatArea() {
+  var ctx = state.ctx;
+  var W = state.W;
+  var H = state.H;
+  var chatY = H - state.LAYOUT.chatH;
+
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, chatY, W, state.LAYOUT.chatH);
+
+  ctx.strokeStyle = '#e0e0e0';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, chatY);
+  ctx.lineTo(W, chatY);
+  ctx.stroke();
+
+  ctx.fillStyle = '#aaa';
+  ctx.font = (W * 0.028) + 'px Arial';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('聊天', 12, chatY + 16);
+
+  var msgY = chatY + 32;
+  for (var i = Math.max(0, state.chatMessages.length - 2); i < state.chatMessages.length; i++) {
+    ctx.fillStyle = '#333';
+    ctx.font = (W * 0.028) + 'px Arial';
+    ctx.fillText(state.chatMessages[i], 12, msgY);
+    msgY += 22;
+  }
+
+  ctx.fillStyle = '#f5f5f5';
+  ui.roundRect(ctx, 10, chatY + 60, W - 20, 25, 6);
+  ctx.fill();
+  ctx.strokeStyle = '#e0e0e0';
+  ctx.lineWidth = 1;
+  ui.roundRect(ctx, 10, chatY + 60, W - 20, 25, 6);
+  ctx.stroke();
+
+  ctx.fillStyle = '#bbb';
+  ctx.font = (W * 0.03) + 'px Arial';
+  ctx.fillText('输入消息...', 18, chatY + 73);
+}
+
+// ===== 绘制军旗棋盘 =====
+function drawJunqiBoard() {
+  var ctx = state.ctx;
+  var bL = state.LAYOUT.boardLeft;
+  var bT = state.LAYOUT.boardTop;
+  var cs = state.CONFIG.CELL_SIZE;
+
+  // 绘制5x12棋盘
+  ctx.strokeStyle = '#8B4513';
+  ctx.lineWidth = 2;
+
+  // 横线
+  for (var y = 0; y <= 12; y++) {
+    ctx.beginPath();
+    ctx.moveTo(bL, bT + y * cs);
+    ctx.lineTo(bL + 4 * cs, bT + y * cs);
+    ctx.stroke();
+  }
+
+  // 竖线
+  for (var x = 0; x <= 5; x++) {
+    ctx.beginPath();
+    ctx.moveTo(bL + x * cs, bT);
+    ctx.lineTo(bL + x * cs, bT + 12 * cs);
+    ctx.stroke();
+  }
+
+  // 中间区域（河界）
+  ctx.fillStyle = '#E8D4B8';
+  ctx.fillRect(bL, bT + 5 * cs, 5 * cs, 2 * cs);
+  ctx.fillStyle = '#8B4513';
+  ctx.font = (cs * 0.5) + 'px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('楚河', bL + cs * 1.5, bT + 6 * cs);
+  ctx.fillText('汉界', bL + cs * 3.5, bT + 6 * cs);
+}
+
+// ===== 绘制军旗棋子 =====
+function drawJunqiPieces() {
+  var ctx = state.ctx;
+  var bL = state.LAYOUT.boardLeft;
+  var bT = state.LAYOUT.boardTop;
+  var cs = state.CONFIG.CELL_SIZE;
+
+  for (var y = 0; y < 12; y++) {
+    for (var x = 0; x < 5; x++) {
+      var piece = state.board[y][x];
+      if (piece === 0) continue;
+
+      var color = junqi.getPieceColor(piece);
+      var type = junqi.getPieceType(piece);
+      var px = bL + x * cs;
+      var py = bT + y * cs;
+      var radius = cs * 0.4;
+
+      // 选中效果
+      var isSelected = state.selectedPiece && state.selectedPiece.x === x && state.selectedPiece.y === y;
+      if (isSelected) {
+        py -= cs * 0.1;
+      }
+
+      // 棋子背景
+      ctx.fillStyle = color === 1 ? '#ff4444' : '#4444ff';
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 棋子边框
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 棋子名称
+      var names = ['', '工', '排', '连', '营', '团', '旅', '师', '军', '司', '炸', '雷', '旗'];
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold ' + (cs * 0.35) + 'px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(names[type], px, py);
+
+      // 选中高亮
+      if (isSelected) {
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(px, py, radius + 3, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // 有效移动点
+  if (state.selectedPiece && state.validMoves.length > 0) {
+    for (var i = 0; i < state.validMoves.length; i++) {
+      var move = state.validMoves[i];
+      var mx = bL + move.x * cs;
+      var my = bT + move.y * cs;
+
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(mx, my, cs * 0.2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+}
+
+// ===== 绘制黑白棋棋盘 =====
+function drawOthelloBoard() {
+  var ctx = state.ctx;
+  var bL = state.LAYOUT.boardLeft;
+  var bT = state.LAYOUT.boardTop;
+  var cs = state.CONFIG.CELL_SIZE;
+
+  // 绘制8x8棋盘
+  ctx.fillStyle = '#228B22';
+  ctx.fillRect(bL, bT, 8 * cs, 8 * cs);
+
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 1;
+
+  for (var i = 0; i <= 8; i++) {
+    ctx.beginPath();
+    ctx.moveTo(bL + i * cs, bT);
+    ctx.lineTo(bL + i * cs, bT + 8 * cs);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(bL, bT + i * cs);
+    ctx.lineTo(bL + 8 * cs, bT + i * cs);
+    ctx.stroke();
+  }
+
+  // 有效落子提示
+  var moves = othello.getValidMoves(state.currentPlayer);
+  for (var j = 0; j < moves.length; j++) {
+    var mx = bL + moves[j].x * cs;
+    var my = bT + moves[j].y * cs;
+
+    ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(mx, my, cs * 0.15, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+// ===== 绘制黑白棋棋子 =====
+function drawOthelloPieces() {
+  var ctx = state.ctx;
+  var bL = state.LAYOUT.boardLeft;
+  var bT = state.LAYOUT.boardTop;
+  var cs = state.CONFIG.CELL_SIZE;
+
+  for (var y = 0; y < 8; y++) {
+    for (var x = 0; x < 8; x++) {
+      var piece = state.board[y][x];
+      if (piece === 0) continue;
+
+      var px = bL + x * cs;
+      var py = bT + y * cs;
+      var radius = cs * 0.4;
+
+      // 阴影
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.beginPath();
+      ctx.arc(px + 2, py + 2, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 棋子
+      ctx.fillStyle = piece === 1 ? '#000' : '#fff';
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 边框
+      ctx.strokeStyle = piece === 1 ? '#333' : '#ccc';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 最后落子标记
+      if (state.lastMove && state.lastMove.x === x && state.lastMove.y === y) {
+        ctx.strokeStyle = '#ff0';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(px, py, radius + 2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // 显示棋子数
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold ' + (cs * 0.4) + 'px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('黑: ' + state.othelloBlackCount, bL + 2 * cs, bT - 15);
+  ctx.fillText('白: ' + state.othelloWhiteCount, bL + 6 * cs, bT - 15);
+}
+
+// 启动游戏
 init();
