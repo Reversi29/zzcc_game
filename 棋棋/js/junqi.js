@@ -1,20 +1,20 @@
 /**
- * 棋棋 - 军旗模块
- * 包含军旗游戏逻辑和AI
+ * 棋棋 - 军棋模块
+ * 包含军棋游戏逻辑和AI
  * 棋盘：5x12（纵向），双方各25子
  */
 
 var state = require('./config.js');
 var utils = require('./utils.js');
 
-// 军旗初始化
+// 军棋初始化
 function initJunqiGame() {
   state.gameType = 'junqi';
 
   var menu = require('./menu.js');
   menu.initBoardLayout();
 
-  // 军旗棋盘 5x12（纵向），每方25子
+  // 军棋棋盘 5x12（纵向），每方25子
   state.board = [];
   for (var y = 0; y < 12; y++) {
     state.board[y] = [];
@@ -42,18 +42,18 @@ function initJunqiGame() {
   if (state.timerInterval) clearInterval(state.timerInterval);
 }
 
-// 军旗初始布局
+// 军棋初始布局
 function junqiSetupBoard() {
-  // 军旗棋子类型（从小到大）
+  // 军棋棋子类型（从小到大）
   // 1=工兵, 2=排长, 3=连长, 4=营长, 5=团长, 6=旅长, 7=师长, 8=军长, 9=司令
-  // 10=炸弹, 11=地雷, 12=军旗
+  // 10=炸弹, 11=地雷, 12=军棋
   // 棋子编码：color*100 + type（红=1, 蓝=2）
   
   // 红方（上方 y=0-4）
   // 第一行（y=0）
   state.board[0][0] = 111; // 地雷
   state.board[0][1] = 111;
-  state.board[0][2] = 112; // 军旗
+  state.board[0][2] = 112; // 军棋
   state.board[0][3] = 111;
   state.board[0][4] = 111;
   
@@ -141,7 +141,7 @@ function junqiGetValidMoves(x, y) {
   var type = getPieceType(piece);
   var color = getPieceColor(piece);
 
-  // 地雷和军旗不能移动
+  // 地雷和军棋不能移动
   if (type === 11 || type === 12) return moves;
 
   // 工兵可以沿铁路任意走（简化：所有位置可走）
@@ -215,7 +215,7 @@ function junqiMovePiece(x, y) {
       state.board[sy][sx] = 0;
     }
 
-    // 检查是否吃掉军旗
+    // 检查是否吃掉军棋
     var targetType = getPieceType(target);
     if (targetType === 12) {
       state.gameOver = true;
@@ -259,10 +259,10 @@ function junqiBattle(attacker, defender) {
     return atkType === 1 ? 1 : -1;
   }
 
-  // 军旗：任意棋子可吃
+  // 军棋：任意棋子可吃
   if (defType === 12) return 1;
 
-  // 工兵对军旗：工兵胜（挖地雷已处理）
+  // 工兵对军棋：工兵胜（挖地雷已处理）
   // 司令对炸弹：炸弹同归于尽已处理
 
   // 大吃小

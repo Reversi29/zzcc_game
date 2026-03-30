@@ -312,7 +312,7 @@ function drawGameOver() {
       color = state.winner === myColor ? '#ffd700' : '#e94560';
     }
   } else if (state.gameType === 'junqi') {
-    // 军旗
+    // 军棋
     var s = state.settings.junqiMode;
     if (s.vsMode === 'human') {
       msg = state.winner === 1 ? '红方胜!' : '蓝方胜!';
@@ -458,7 +458,7 @@ function drawCreateCheckers() {
   }
 }
 
-// 绘制创建军旗对局页面
+// 绘制创建军棋对局页面
 function drawCreateJunqi() {
   var ctx = state.ctx;
   var W = state.W;
@@ -472,7 +472,7 @@ function drawCreateJunqi() {
   ctx.fillStyle = '#333';
   ctx.font = 'bold ' + (W * 0.06) + 'px Arial';
   ctx.textAlign = 'center';
-  ctx.fillText('军旗对局', W / 2, state.LAYOUT.topH + 30);
+  ctx.fillText('军棋对局', W / 2, state.LAYOUT.topH + 30);
 
   for (var i = 0; i < state.menuButtons.length; i++) {
     var b = state.menuButtons[i];

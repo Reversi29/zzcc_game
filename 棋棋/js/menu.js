@@ -20,7 +20,7 @@ function initMenu() {
   state.menuButtons.push({ id: 'mode_go', text: '围棋', x: cx, y: startY + gap, w: btnW, h: btnH });
   state.menuButtons.push({ id: 'mode_xiangqi', text: '中国象棋', x: cx, y: startY + gap * 2, w: btnW, h: btnH });
   state.menuButtons.push({ id: 'mode_checkers', text: '跳棋', x: cx, y: startY + gap * 3, w: btnW, h: btnH });
-  state.menuButtons.push({ id: 'mode_junqi', text: '军旗', x: cx, y: startY + gap * 4, w: btnW, h: btnH });
+  state.menuButtons.push({ id: 'mode_junqi', text: '军棋', x: cx, y: startY + gap * 4, w: btnW, h: btnH });
   state.menuButtons.push({ id: 'mode_othello', text: '黑白棋', x: cx, y: startY + gap * 5, w: btnW, h: btnH });
   state.menuButtons.push({ id: 'settings', text: '设置', x: cx, y: startY + gap * 6, w: btnW, h: btnH });
 }
@@ -173,7 +173,7 @@ function initBoardLayout() {
     state.LAYOUT.boardTop = topH + (availH - boardH) / 2;
     state.LAYOUT.boardPx = boardW;
   } else if (state.gameType === 'junqi') {
-    // 军旗：12行5列
+    // 军棋：12行5列
     var maxCellH = availH / 12;
     var maxCellW = (W - 40) / 4;
     var cs = Math.min(maxCellH, maxCellW);
@@ -322,7 +322,7 @@ function initCreateCheckers() {
   state.menuButtons.push({ id: 'back', text: '返回', x: cx, y: state.H - 40, w: 120, h: 35, type: 'btn' });
 }
 
-// 初始化军旗创建对局
+// 初始化军棋创建对局
 function initCreateJunqi() {
   state.currentScreen = 'create_junqi';
   state.menuButtons = [];

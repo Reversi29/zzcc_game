@@ -118,7 +118,7 @@ var state = module.exports = {
   goScoreRequestActive: false,
   goMoveCount: 0,
 
-  // 军旗专用
+  // 军棋专用
   junqiSelectedPiece: null,
   junqiValidMoves: [],
   junqiRevealed: [],

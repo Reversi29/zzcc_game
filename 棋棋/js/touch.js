@@ -397,7 +397,7 @@ function handleActionTouch(x, y, actionY) {
   var btnY = actionY + 2;
   var confirmY = btnY;
 
-  // 象棋、跳棋、军旗、黑白棋操作按钮处理
+  // 象棋、跳棋、军棋、黑白棋操作按钮处理
   if (state.gameType === 'xiangqi' || state.gameType === 'checkers' || state.gameType === 'junqi' || state.gameType === 'othello') {
     var abW = 80, abH = 36, abGap = 12;
     var totalW = abW * 3 + abGap * 2;
@@ -595,7 +595,7 @@ function handleCheckersTouch(x, y) {
   }
 }
 
-// 军旗触摸处理
+// 军棋触摸处理
 function handleJunqiTouch(x, y) {
   var junqi = require('./junqi.js');
   var bL = state.LAYOUT.boardLeft;

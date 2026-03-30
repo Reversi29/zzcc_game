@@ -187,7 +187,7 @@ function drawPlayerInfo() {
   }
 
   if (state.gameType === 'junqi') {
-    // 军旗：红方 vs 蓝方
+    // 军棋：红方 vs 蓝方
     var s = state.settings.junqiMode;
     var redActive = state.currentPlayer === 1;
     var blueActive = state.currentPlayer === 2;
@@ -377,7 +377,7 @@ function drawBoard() {
   }
 
   if (state.gameType === 'junqi') {
-    // 军旗棋盘：5x12
+    // 军棋棋盘：5x12
     drawJunqiBoard();
     return;
   }
@@ -456,16 +456,24 @@ function drawXiangqiBoard() {
   ctx.strokeStyle = '#8B4513';
   ctx.lineWidth = 1;
 
-  // 绘制网格线
+  // 绘制横线（10条）
   for (var i = 0; i < rows; i++) {
     ctx.beginPath();
     ctx.moveTo(bL, bT + i * cs);
     ctx.lineTo(bL + lineLen, bT + i * cs);
     ctx.stroke();
   }
+  
+  // 绘制竖线（楚河汉界处断开，只画上半部分和下半部分）
   for (var i = 0; i < cols; i++) {
+    // 上半部分（行0到行4）
     ctx.beginPath();
     ctx.moveTo(bL + i * cs, bT);
+    ctx.lineTo(bL + i * cs, bT + 4 * cs);
+    ctx.stroke();
+    // 下半部分（行5到行9）
+    ctx.beginPath();
+    ctx.moveTo(bL + i * cs, bT + 5 * cs);
     ctx.lineTo(bL + i * cs, bT + boardH);
     ctx.stroke();
   }
@@ -915,7 +923,7 @@ function drawActionArea() {
   ctx.lineTo(W, actionY);
   ctx.stroke();
 
-  // 象棋、跳棋、军旗、黑白棋操作按钮
+  // 象棋、跳棋、军棋、黑白棋操作按钮
   if (state.gameType === 'xiangqi' || state.gameType === 'checkers' || state.gameType === 'junqi' || state.gameType === 'othello') {
     var abW = 80, abH = 36, abGap = 12;
     var totalW = abW * 3 + abGap * 2;
@@ -1079,7 +1087,7 @@ function drawChatArea() {
   ctx.fillText('输入消息...', 18, chatY + 73);
 }
 
-// ===== 绘制军旗棋盘 =====
+// ===== 绘制军棋棋盘 =====
 function drawJunqiBoard() {
   var ctx = state.ctx;
   var bL = state.LAYOUT.boardLeft;
@@ -1116,7 +1124,7 @@ function drawJunqiBoard() {
   ctx.fillText('汉界', bL + cs * 3.5, bT + 6 * cs);
 }
 
-// ===== 绘制军旗棋子 =====
+// ===== 绘制军棋棋子 =====
 function drawJunqiPieces() {
   var ctx = state.ctx;
   var bL = state.LAYOUT.boardLeft;
