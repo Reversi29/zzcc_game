@@ -62,6 +62,18 @@ function scheduleAiMove() {
       if (state.gameType === 'go') {
         var go = require('./go.js');
         go.goAiMove();
+      } else if (state.gameType === 'xiangqi') {
+        var xiangqi = require('./xiangqi.js');
+        xiangqi.xiangqiAiMove();
+      } else if (state.gameType === 'checkers') {
+        var checkers = require('./checkers.js');
+        checkers.checkersAiMove();
+      } else if (state.gameType === 'junqi') {
+        var junqi = require('./junqi.js');
+        junqi.junqiAiMove();
+      } else if (state.gameType === 'othello') {
+        var othello = require('./othello.js');
+        othello.othelloAiMove();
       } else {
         var gomoku = require('./gomoku.js');
         gomoku.aiMove();

@@ -292,13 +292,53 @@ function drawGameOver() {
   ctx.fillRect(0, 0, W, H);
 
   var msg, color, sub = '';
+  
   if (state.gameType === 'go') {
+    // 围棋
     msg = state.winner === 1 ? '黑方胜!' : '白方胜!';
     color = '#ffd700';
     if (state.chatMessages.length > 0) {
       sub = state.chatMessages[state.chatMessages.length - 1];
     }
+  } else if (state.gameType === 'xiangqi') {
+    // 象棋
+    var s = state.settings.xiangqiMode;
+    if (s.vsMode === 'human') {
+      msg = state.winner === 1 ? '红方胜!' : '黑方胜!';
+      color = '#ffd700';
+    } else {
+      var myColor = s.playerColor;
+      msg = state.winner === myColor ? '你赢了!' : '你输了!';
+      color = state.winner === myColor ? '#ffd700' : '#e94560';
+    }
+  } else if (state.gameType === 'junqi') {
+    // 军旗
+    var s = state.settings.junqiMode;
+    if (s.vsMode === 'human') {
+      msg = state.winner === 1 ? '红方胜!' : '蓝方胜!';
+      color = '#ffd700';
+    } else {
+      var myColor = s.playerColor;
+      msg = state.winner === myColor ? '你赢了!' : '你输了!';
+      color = state.winner === myColor ? '#ffd700' : '#e94560';
+    }
+  } else if (state.gameType === 'othello') {
+    // 黑白棋
+    var s = state.settings.othelloMode;
+    if (s.vsMode === 'human') {
+      msg = state.winner === 1 ? '黑方胜!' : '白方胜!';
+      color = '#ffd700';
+    } else {
+      var myColor = s.playerColor;
+      msg = state.winner === myColor ? '你赢了!' : '你输了!';
+      color = state.winner === myColor ? '#ffd700' : '#e94560';
+    }
+  } else if (state.gameType === 'checkers') {
+    // 跳棋
+    msg = '玩家' + state.winner + '胜!';
+    color = '#ffd700';
   } else {
+    // 五子棋
     var s = state.settings.normalMode;
     if (s.vsMode === 'human') {
       msg = state.winner === 1 ? '黑方胜!' : '白方胜!';

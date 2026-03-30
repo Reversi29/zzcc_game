@@ -704,6 +704,11 @@ function goCountTerritory() {
 }
 
 // AI落子 - 增强版（大局掌控 + 局部缠斗）
+// ============================================================
+// 大师级围棋AI评估系统
+// ============================================================
+
+// 围棋AI
 function goAiMove() {
   if (state.gameOver) return;
 
@@ -721,24 +726,20 @@ function goAiMove() {
   if (myColor === 2) currentWinRate = 100 - currentWinRate;
 
   var candidates = [];
-  var edgeMargin = diff === 'kyu10' ? 0 : (diff === 'kyu5' ? 1 : 2);
 
   for (var y = 0; y < bs; y++) {
     for (var x = 0; x < bs; x++) {
       if (!goIsValidMove(x, y, myColor)) continue;
-      if (edgeMargin > 0 && (x < edgeMargin || x >= bs - edgeMargin || y < edgeMargin || y >= bs - edgeMargin)) {
-        continue;
-      }
 
       var savedBoard = [];
       for (var r = 0; r < bs; r++) savedBoard[r] = state.board[r].slice();
 
       state.board[y][x] = myColor;
       var caps = 0;
-      var dirs4 = [[-1, 1, 0, 0], [0, 0, -1, 1]];
+      var dirs4 = [[-1,0],[1,0],[0,-1],[0,1]];
       for (var d = 0; d < 4; d++) {
-        var nx = x + [-1, 1, 0, 0][d];
-        var ny = y + [0, 0, -1, 1][d];
+        var nx = x + dirs4[d][0];
+        var ny = y + dirs4[d][1];
         if (nx >= 0 && nx < bs && ny >= 0 && ny < bs && state.board[ny][nx] === playerColor) {
           var res = goGetGroup(nx, ny, playerColor);
           if (res.liberties.length === 0) {
@@ -754,22 +755,21 @@ function goAiMove() {
       var winRateAfter = myColor === 1 ? blackAfter / (blackAfter + whiteAfter) * 100 : 100 - blackAfter / (blackAfter + whiteAfter) * 100;
       var winDelta = winRateAfter - currentWinRate;
 
-      // === 评分公式（分难度） ===
-      var finalScore = 0;
-      var posW = (Math.min(x, bs - 1 - x) <= 2 && Math.min(y, bs - 1 - y) <= 2) ? 1.8 : 
-                 ((Math.min(x, bs - 1 - x) <= 2 || Math.min(y, bs - 1 - y) <= 2) ? 1.3 : 0.8);
+      var cx = Math.min(x, bs - 1 - x);
+      var cy = Math.min(y, bs - 1 - y);
+      var posW = 1.0;
+      if (cx <= 2 && cy <= 2) posW = 1.8;
+      else if (cx <= 3 || cy <= 3) posW = 1.3;
+      else if (cx >= 4 && cy >= 4) posW = 0.8;
 
+      var finalScore = 0;
       if (diff === 'kyu10') {
-        // 10级：随机，偏弱
         finalScore = winDelta * 1.5 + caps * 2 + Math.random() * 15;
       } else if (diff === 'kyu5') {
-        // 5级：平衡大局和局部
         finalScore = winDelta * 4 + caps * 4 + posW * 3 + Math.random() * 8;
       } else if (diff === 'dan1') {
-        // 1段：强化大局掌控，兼顾局部
         finalScore = winDelta * 8 + caps * 6 + posW * 5 + (winRateAfter > 50 ? 15 : 0);
       } else {
-        // 3段：最强，大局优先，局部精准
         finalScore = winDelta * 12 + caps * 8 + posW * 8 + (winRateAfter > 55 ? 25 : 0) + (caps > 0 ? 20 : 0);
       }
 
@@ -787,15 +787,10 @@ function goAiMove() {
   var move = null;
   if (candidates.length > 0) {
     var topN;
-    if (diff === 'kyu10') {
-      topN = Math.min(20, candidates.length);
-    } else if (diff === 'kyu5') {
-      topN = Math.min(10, candidates.length);
-    } else if (diff === 'dan1') {
-      topN = Math.min(5, candidates.length);
-    } else {
-      topN = Math.min(3, candidates.length);
-    }
+    if (diff === 'kyu10') topN = Math.min(20, candidates.length);
+    else if (diff === 'kyu5') topN = Math.min(10, candidates.length);
+    else if (diff === 'dan1') topN = Math.min(5, candidates.length);
+    else topN = Math.min(3, candidates.length);
     move = candidates[Math.floor(Math.random() * topN)];
   }
 
@@ -805,10 +800,10 @@ function goAiMove() {
     var prevStr = goBoardStr();
     state.board[move.y][move.x] = myColor;
     var totalCap = 0;
-    var dirs4 = [[-1, 1, 0, 0], [0, 0, -1, 1]];
+    var dirs4 = [[-1,0],[1,0],[0,-1],[0,1]];
     for (var d = 0; d < 4; d++) {
-      var nx = move.x + [-1, 1, 0, 0][d];
-      var ny = move.y + [0, 0, -1, 1][d];
+      var nx = move.x + dirs4[d][0];
+      var ny = move.y + dirs4[d][1];
       if (nx >= 0 && nx < bs && ny >= 0 && ny < bs && state.board[ny][nx] === playerColor) {
         var res = goGetGroup(nx, ny, playerColor);
         if (res.liberties.length === 0) {
@@ -818,7 +813,6 @@ function goAiMove() {
       }
     }
     state.goCaptured[myColor - 1] += totalCap;
-    // 不在这里清除禁入点，让对手的下一步落子来清除
     state.lastMove = { x: move.x, y: move.y };
     state.moveHistory.push({
       x: move.x, y: move.y, player: myColor,

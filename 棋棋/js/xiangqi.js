@@ -13,7 +13,6 @@ function initXiangqiGame() {
   var menu = require('./menu.js');
   menu.initBoardLayout();
 
-  // 象棋棋盘 10x9（纵x横）
   state.board = [];
   for (var y = 0; y < 10; y++) {
     state.board[y] = [];
@@ -22,15 +21,14 @@ function initXiangqiGame() {
     }
   }
 
-  // 初始布局
-  xiangqiSetupBoard();
-
   var s = state.settings.xiangqiMode;
   if (s.playerColor === 0) {
     s.playerColor = Math.random() < 0.5 ? 1 : 2;
   }
 
-  state.currentPlayer = 1; // 红方先手
+  xiangqiSetupBoard();
+
+  state.currentPlayer = 1;
   state.isMyTurn = s.vsMode === 'human' ? true : s.playerColor === 1;
   state.gameOver = false;
   state.winner = null;
@@ -40,8 +38,8 @@ function initXiangqiGame() {
   state.previewX = -1;
   state.previewY = -1;
   state.canPlace = false;
-  state.selectedPiece = null; // 选中的棋子
-  state.validMoves = []; // 有效移动列表
+  state.selectedPiece = null;
+  state.validMoves = [];
   state.chatMessages = [];
 
   if (state.timerInterval) clearInterval(state.timerInterval);
@@ -51,128 +49,72 @@ function initXiangqiGame() {
   }
 }
 
-// 象棋初始布局
 function xiangqiSetupBoard() {
-  // 红方（下方，y=0-4）
-  // 兵：y=3, x=0,2,4,6,8
-  // 马：y=0, x=1,7
-  // 象：y=0, x=2,6
-  // 车：y=0, x=0,8
-  // 炮：y=2, x=1,7
-  // 士：y=0, x=3,5
-  // 帅：y=0, x=4
+  var s = state.settings.xiangqiMode;
+  var playerColor = s.playerColor || 1;
+  var bottomColor = playerColor;
+  var topColor = playerColor === 1 ? 2 : 1;
 
-  // 黑方（上方，y=9-5）
-  // 兵：y=6, x=0,2,4,6,8
-  // 马：y=9, x=1,7
-  // 象：y=9, x=2,6
-  // 车：y=9, x=0,8
-  // 炮：y=7, x=1,7
-  // 士：y=9, x=3,5
-  // 将：y=9, x=4
+  // 下方（玩家方）
+  state.board[9][0] = bottomColor * 10 + 1;
+  state.board[9][1] = bottomColor * 10 + 2;
+  state.board[9][2] = bottomColor * 10 + 3;
+  state.board[9][3] = bottomColor * 10 + 4;
+  state.board[9][4] = bottomColor * 10 + 5;
+  state.board[9][5] = bottomColor * 10 + 4;
+  state.board[9][6] = bottomColor * 10 + 3;
+  state.board[9][7] = bottomColor * 10 + 2;
+  state.board[9][8] = bottomColor * 10 + 1;
+  state.board[7][1] = bottomColor * 10 + 6;
+  state.board[7][7] = bottomColor * 10 + 6;
+  state.board[6][0] = bottomColor * 10 + 7;
+  state.board[6][2] = bottomColor * 10 + 7;
+  state.board[6][4] = bottomColor * 10 + 7;
+  state.board[6][6] = bottomColor * 10 + 7;
+  state.board[6][8] = bottomColor * 10 + 7;
 
-  // 红方棋子（1开头）
-  state.board[0][0] = 11; // 红车
-  state.board[0][1] = 12; // 红马
-  state.board[0][2] = 13; // 红象
-  state.board[0][3] = 14; // 红士
-  state.board[0][4] = 15; // 红帅
-  state.board[0][5] = 14; // 红士
-  state.board[0][6] = 13; // 红象
-  state.board[0][7] = 12; // 红马
-  state.board[0][8] = 11; // 红车
-
-  state.board[2][1] = 16; // 红炮
-  state.board[2][7] = 16; // 红炮
-
-  state.board[3][0] = 17; // 红兵
-  state.board[3][2] = 17; // 红兵
-  state.board[3][4] = 17; // 红兵
-  state.board[3][6] = 17; // 红兵
-  state.board[3][8] = 17; // 红兵
-
-  // 黑方棋子（2开头）
-  state.board[9][0] = 21; // 黑车
-  state.board[9][1] = 22; // 黑马
-  state.board[9][2] = 23; // 黑象
-  state.board[9][3] = 24; // 黑士
-  state.board[9][4] = 25; // 黑将
-  state.board[9][5] = 24; // 黑士
-  state.board[9][6] = 23; // 黑象
-  state.board[9][7] = 22; // 黑马
-  state.board[9][8] = 21; // 黑车
-
-  state.board[7][1] = 26; // 黑炮
-  state.board[7][7] = 26; // 黑炮
-
-  state.board[6][0] = 27; // 黑兵
-  state.board[6][2] = 27; // 黑兵
-  state.board[6][4] = 27; // 黑兵
-  state.board[6][6] = 27; // 黑兵
-  state.board[6][8] = 27; // 黑兵
+  // 上方（对方）
+  state.board[0][0] = topColor * 10 + 1;
+  state.board[0][1] = topColor * 10 + 2;
+  state.board[0][2] = topColor * 10 + 3;
+  state.board[0][3] = topColor * 10 + 4;
+  state.board[0][4] = topColor * 10 + 5;
+  state.board[0][5] = topColor * 10 + 4;
+  state.board[0][6] = topColor * 10 + 3;
+  state.board[0][7] = topColor * 10 + 2;
+  state.board[0][8] = topColor * 10 + 1;
+  state.board[2][1] = topColor * 10 + 6;
+  state.board[2][7] = topColor * 10 + 6;
+  state.board[3][0] = topColor * 10 + 7;
+  state.board[3][2] = topColor * 10 + 7;
+  state.board[3][4] = topColor * 10 + 7;
+  state.board[3][6] = topColor * 10 + 7;
+  state.board[3][8] = topColor * 10 + 7;
 }
 
-// 获取棋子类型名称
 function xiangqiPieceName(piece) {
   var names = {
     11: '车', 12: '马', 13: '象', 14: '士', 15: '帅', 16: '炮', 17: '兵',
-    21: '车', 22: '马', 23: '象', 24: '士', 25: '将', 26: '炮', 27: '兵'
+    21: '车', 22: '马', 23: '象', 24: '士', 25: '将', 26: '炮', 27: '卒'
   };
   return names[piece] || '';
 }
 
-// 获取棋子颜色（1=红，2=黑）
 function xiangqiPieceColor(piece) {
   return piece === 0 ? 0 : Math.floor(piece / 10);
 }
 
-// 检查位置是否在宫内（帅/将和士的活动范围）
 function xiangqiInPalace(x, y, color) {
-  if (color === 1) {
-    // 红方宫：x=3-5, y=0-2
-    return x >= 3 && x <= 5 && y >= 0 && y <= 2;
-  } else {
-    // 黑方宫：x=3-5, y=7-9
+  var s = state.settings.xiangqiMode;
+  var playerColor = s.playerColor || 1;
+  if (color === playerColor) {
     return x >= 3 && x <= 5 && y >= 7 && y <= 9;
+  } else {
+    return x >= 3 && x <= 5 && y >= 0 && y <= 2;
   }
 }
 
-// 获取有效移动列表
-function xiangqiGetValidMoves(x, y) {
-  var piece = state.board[y][x];
-  if (piece === 0) return [];
-
-  var color = xiangqiPieceColor(piece);
-  var type = piece % 10;
-  var moves = [];
-
-  if (type === 1) {
-    // 车：直线移动
-    xiangqiAddLineMoves(x, y, color, moves);
-  } else if (type === 2) {
-    // 马：日字移动（需要检查蹩马）
-    xiangqiAddHorseMoves(x, y, color, moves);
-  } else if (type === 3) {
-    // 象：斜线移动（不过河）
-    xiangqiAddElephantMoves(x, y, color, moves);
-  } else if (type === 4) {
-    // 士：宫内斜线移动
-    xiangqiAddAdvisorMoves(x, y, color, moves);
-  } else if (type === 5) {
-    // 帅/将：宫内移动
-    xiangqiAddGeneralMoves(x, y, color, moves);
-  } else if (type === 6) {
-    // 炮：直线移动，吃子需要跳过一个棋子
-    xiangqiAddCannonMoves(x, y, color, moves);
-  } else if (type === 7) {
-    // 兵：过河前后移动不同
-    xiangqiAddSoldierMoves(x, y, color, moves);
-  }
-
-  return moves;
-}
-
-// 车的移动
+// 移动生成函数
 function xiangqiAddLineMoves(x, y, color, moves) {
   var dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
   for (var d = 0; d < 4; d++) {
@@ -193,77 +135,65 @@ function xiangqiAddLineMoves(x, y, color, moves) {
   }
 }
 
-// 马的移动（日字，需检查蹩马）
 function xiangqiAddHorseMoves(x, y, color, moves) {
   var steps = [
-    { dx: 1, dy: 2, block: { dx: 1, dy: 1 } },
-    { dx: 1, dy: -2, block: { dx: 1, dy: -1 } },
-    { dx: -1, dy: 2, block: { dx: -1, dy: 1 } },
-    { dx: -1, dy: -2, block: { dx: -1, dy: -1 } },
-    { dx: 2, dy: 1, block: { dx: 1, dy: 0 } },
-    { dx: 2, dy: -1, block: { dx: 1, dy: 0 } },
-    { dx: -2, dy: 1, block: { dx: -1, dy: 0 } },
-    { dx: -2, dy: -1, block: { dx: -1, dy: 0 } }
+    { dx: 1, dy: 2, blockX: 0, blockY: 1 },
+    { dx: 1, dy: -2, blockX: 0, blockY: -1 },
+    { dx: -1, dy: 2, blockX: 0, blockY: 1 },
+    { dx: -1, dy: -2, blockX: 0, blockY: -1 },
+    { dx: 2, dy: 1, blockX: 1, blockY: 0 },
+    { dx: 2, dy: -1, blockX: 1, blockY: 0 },
+    { dx: -2, dy: 1, blockX: -1, blockY: 0 },
+    { dx: -2, dy: -1, blockX: -1, blockY: 0 }
   ];
-
   for (var i = 0; i < steps.length; i++) {
     var step = steps[i];
     var nx = x + step.dx;
     var ny = y + step.dy;
-    var bx = x + step.block.dx;
-    var by = y + step.block.dy;
-
-    if (nx >= 0 && nx < 9 && ny >= 0 && ny < 10 && state.board[by][bx] === 0) {
-      var target = state.board[ny][nx];
-      if (target === 0 || xiangqiPieceColor(target) !== color) {
-        moves.push({ x: nx, y: ny });
-      }
-    }
-  }
-}
-
-// 象的移动（斜线，不过河）
-function xiangqiAddElephantMoves(x, y, color, moves) {
-  var riverY = color === 1 ? 4 : 5; // 红方不过y=5，黑方不过y=4
-  var steps = [
-    { dx: 2, dy: 2, block: { dx: 1, dy: 1 } },
-    { dx: 2, dy: -2, block: { dx: 1, dy: -1 } },
-    { dx: -2, dy: 2, block: { dx: -1, dy: 1 } },
-    { dx: -2, dy: -2, block: { dx: -1, dy: -1 } }
-  ];
-
-  for (var i = 0; i < steps.length; i++) {
-    var step = steps[i];
-    var nx = x + step.dx;
-    var ny = y + step.dy;
-    var bx = x + step.block.dx;
-    var by = y + step.block.dy;
-
+    var bx = x + step.blockX;
+    var by = y + step.blockY;
     if (nx >= 0 && nx < 9 && ny >= 0 && ny < 10) {
-      if (color === 1 && ny <= 4 || color === 2 && ny >= 5) {
-        if (state.board[by][bx] === 0) {
-          var target = state.board[ny][nx];
-          if (target === 0 || xiangqiPieceColor(target) !== color) {
-            moves.push({ x: nx, y: ny });
-          }
+      if (state.board[by][bx] === 0) {
+        var target = state.board[ny][nx];
+        if (target === 0 || xiangqiPieceColor(target) !== color) {
+          moves.push({ x: nx, y: ny });
         }
       }
     }
   }
 }
 
-// 士的移动（宫内斜线）
+function xiangqiAddElephantMoves(x, y, color, moves) {
+  var s = state.settings.xiangqiMode;
+  var playerColor = s.playerColor || 1;
+  var min_y = color === playerColor ? 5 : 0;
+  var max_y = color === playerColor ? 9 : 4;
+  var steps = [
+    { dx: 2, dy: 2, bx: 1, by: 1 },
+    { dx: 2, dy: -2, bx: 1, by: -1 },
+    { dx: -2, dy: 2, bx: -1, by: 1 },
+    { dx: -2, dy: -2, bx: -1, by: -1 }
+  ];
+  for (var i = 0; i < steps.length; i++) {
+    var step = steps[i];
+    var nx = x + step.dx;
+    var ny = y + step.dy;
+    if (nx >= 0 && nx < 9 && ny >= min_y && ny <= max_y) {
+      if (state.board[y + step.by][x + step.bx] === 0) {
+        var target = state.board[ny][nx];
+        if (target === 0 || xiangqiPieceColor(target) !== color) {
+          moves.push({ x: nx, y: ny });
+        }
+      }
+    }
+  }
+}
+
 function xiangqiAddAdvisorMoves(x, y, color, moves) {
-  var steps = [
-    { dx: 1, dy: 1 }, { dx: 1, dy: -1 },
-    { dx: -1, dy: 1 }, { dx: -1, dy: -1 }
-  ];
-
+  var steps = [{ dx: 1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: 1 }, { dx: -1, dy: -1 }];
   for (var i = 0; i < steps.length; i++) {
-    var step = steps[i];
-    var nx = x + step.dx;
-    var ny = y + step.dy;
-
+    var nx = x + steps[i].dx;
+    var ny = y + steps[i].dy;
     if (xiangqiInPalace(nx, ny, color)) {
       var target = state.board[ny][nx];
       if (target === 0 || xiangqiPieceColor(target) !== color) {
@@ -273,18 +203,11 @@ function xiangqiAddAdvisorMoves(x, y, color, moves) {
   }
 }
 
-// 帅/将的移动（宫内）
 function xiangqiAddGeneralMoves(x, y, color, moves) {
-  var steps = [
-    { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
-    { dx: 1, dy: 0 }, { dx: -1, dy: 0 }
-  ];
-
+  var steps = [{ dx: 0, dy: 1 }, { dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: -1, dy: 0 }];
   for (var i = 0; i < steps.length; i++) {
-    var step = steps[i];
-    var nx = x + step.dx;
-    var ny = y + step.dy;
-
+    var nx = x + steps[i].dx;
+    var ny = y + steps[i].dy;
     if (xiangqiInPalace(nx, ny, color)) {
       var target = state.board[ny][nx];
       if (target === 0 || xiangqiPieceColor(target) !== color) {
@@ -294,7 +217,6 @@ function xiangqiAddGeneralMoves(x, y, color, moves) {
   }
 }
 
-// 炮的移动（直线，吃子需跳过一个棋子）
 function xiangqiAddCannonMoves(x, y, color, moves) {
   var dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
   for (var d = 0; d < 4; d++) {
@@ -303,7 +225,6 @@ function xiangqiAddCannonMoves(x, y, color, moves) {
       var nx = x + dirs[d][0] * step;
       var ny = y + dirs[d][1] * step;
       if (nx < 0 || nx >= 9 || ny < 0 || ny >= 10) break;
-
       var target = state.board[ny][nx];
       if (target === 0) {
         if (!jumped) moves.push({ x: nx, y: ny });
@@ -321,54 +242,127 @@ function xiangqiAddCannonMoves(x, y, color, moves) {
   }
 }
 
-// 兵的移动（过河前后不同）
 function xiangqiAddSoldierMoves(x, y, color, moves) {
-  var riverY = color === 1 ? 5 : 4;
-  var hasCrossed = color === 1 ? y >= riverY : y <= riverY;
+  var s = state.settings.xiangqiMode;
+  var playerColor = s.playerColor || 1;
+  var forward = color === playerColor ? -1 : 1;
+  var riverY = color === playerColor ? 4 : 5;
+  var hasCrossed = color === playerColor ? y <= riverY : y >= riverY;
 
-  if (!hasCrossed) {
-    // 未过河：只能向前
-    var ny = color === 1 ? y + 1 : y - 1;
-    if (ny >= 0 && ny < 10) {
-      var target = state.board[ny][x];
-      if (target === 0 || xiangqiPieceColor(target) !== color) {
-        moves.push({ x: x, y: ny });
-      }
+  var ny = y + forward;
+  if (ny >= 0 && ny < 10) {
+    var target = state.board[ny][x];
+    if (target === 0 || xiangqiPieceColor(target) !== color) {
+      moves.push({ x: x, y: ny });
     }
-  } else {
-    // 已过河：可前进、左右移动
-    var dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
-    if (color === 2) dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]]; // 黑方向下
-
-    for (var d = 0; d < 4; d++) {
-      var nx = x + dirs[d][0];
-      var ny = y + dirs[d][1];
-      if (ny >= 0 && ny < 10 && nx >= 0 && nx < 9) {
-        var target = state.board[ny][nx];
+  }
+  if (hasCrossed) {
+    for (var dx = -1; dx <= 1; dx += 2) {
+      var nx = x + dx;
+      if (nx >= 0 && nx < 9) {
+        target = state.board[y][nx];
         if (target === 0 || xiangqiPieceColor(target) !== color) {
-          moves.push({ x: nx, y: ny });
+          moves.push({ x: nx, y: y });
         }
       }
     }
   }
 }
 
-// 选中棋子
+function xiangqiIsKingsFacing() {
+  var redKing = null, blackKing = null;
+  for (var y = 0; y < 10; y++) {
+    for (var x = 0; x < 9; x++) {
+      if (state.board[y][x] === 15) redKing = { x: x, y: y };
+      if (state.board[y][x] === 25) blackKing = { x: x, y: y };
+    }
+  }
+  if (!redKing || !blackKing || redKing.x !== blackKing.x) return false;
+  for (var y = Math.min(redKing.y, blackKing.y) + 1; y < Math.max(redKing.y, blackKing.y); y++) {
+    if (state.board[y][redKing.x] !== 0) return false;
+  }
+  return true;
+}
+
+function xiangqiIsUnderAttack(x, y, byColor) {
+  for (var cy = 0; cy < 10; cy++) {
+    for (var cx = 0; cx < 9; cx++) {
+      var piece = state.board[cy][cx];
+      if (piece !== 0 && xiangqiPieceColor(piece) === byColor) {
+        var moves = [], type = piece % 10, color = xiangqiPieceColor(piece);
+        if (type === 1) xiangqiAddLineMoves(cx, cy, color, moves);
+        else if (type === 2) xiangqiAddHorseMoves(cx, cy, color, moves);
+        else if (type === 3) xiangqiAddElephantMoves(cx, cy, color, moves);
+        else if (type === 4) xiangqiAddAdvisorMoves(cx, cy, color, moves);
+        else if (type === 5) xiangqiAddGeneralMoves(cx, cy, color, moves);
+        else if (type === 6) xiangqiAddCannonMoves(cx, cy, color, moves);
+        else if (type === 7) xiangqiAddSoldierMoves(cx, cy, color, moves);
+        for (var i = 0; i < moves.length; i++) {
+          if (moves[i].x === x && moves[i].y === y) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function xiangqiIsInCheck(color) {
+  var kingPiece = color === 1 ? 15 : 25;
+  for (var y = 0; y < 10; y++) {
+    for (var x = 0; x < 9; x++) {
+      if (state.board[y][x] === kingPiece) {
+        return xiangqiIsUnderAttack(x, y, color === 1 ? 2 : 1);
+      }
+    }
+  }
+  return false;
+}
+
+function xiangqiWouldCauseSelfCheck(fromX, fromY, toX, toY, color) {
+  var piece = state.board[fromY][fromX];
+  var captured = state.board[toY][toX];
+  state.board[toY][toX] = piece;
+  state.board[fromY][fromX] = 0;
+  var inCheck = xiangqiIsInCheck(color) || xiangqiIsKingsFacing();
+  state.board[fromY][fromX] = piece;
+  state.board[toY][toX] = captured;
+  return inCheck;
+}
+
+function xiangqiGetValidMoves(x, y) {
+  var piece = state.board[y][x];
+  if (piece === 0) return [];
+  var color = xiangqiPieceColor(piece);
+  var type = piece % 10;
+  var moves = [];
+  if (type === 1) xiangqiAddLineMoves(x, y, color, moves);
+  else if (type === 2) xiangqiAddHorseMoves(x, y, color, moves);
+  else if (type === 3) xiangqiAddElephantMoves(x, y, color, moves);
+  else if (type === 4) xiangqiAddAdvisorMoves(x, y, color, moves);
+  else if (type === 5) xiangqiAddGeneralMoves(x, y, color, moves);
+  else if (type === 6) xiangqiAddCannonMoves(x, y, color, moves);
+  else if (type === 7) xiangqiAddSoldierMoves(x, y, color, moves);
+
+  var validMoves = [];
+  for (var i = 0; i < moves.length; i++) {
+    if (!xiangqiWouldCauseSelfCheck(x, y, moves[i].x, moves[i].y, color)) {
+      validMoves.push(moves[i]);
+    }
+  }
+  return validMoves;
+}
+
 function xiangqiSelectPiece(x, y) {
   var piece = state.board[y][x];
   if (piece === 0) return;
-
   var color = xiangqiPieceColor(piece);
   if (color !== state.currentPlayer) return;
-
   state.selectedPiece = { x: x, y: y };
   state.validMoves = xiangqiGetValidMoves(x, y);
 }
 
-// 移动棋子
 function xiangqiMovePiece(x, y) {
   if (!state.selectedPiece) return false;
-
   var isValid = false;
   for (var i = 0; i < state.validMoves.length; i++) {
     if (state.validMoves[i].x === x && state.validMoves[i].y === y) {
@@ -376,14 +370,12 @@ function xiangqiMovePiece(x, y) {
       break;
     }
   }
-
   if (!isValid) return false;
 
   var sx = state.selectedPiece.x;
   var sy = state.selectedPiece.y;
   var piece = state.board[sy][sx];
 
-  // 记录移动
   state.moveHistory.push({
     from: { x: sx, y: sy },
     to: { x: x, y: y },
@@ -392,20 +384,34 @@ function xiangqiMovePiece(x, y) {
     player: state.currentPlayer
   });
 
-  // 执行移动
   state.board[y][x] = piece;
   state.board[sy][sx] = 0;
   state.lastMove = { from: { x: sx, y: sy }, to: { x: x, y: y } };
 
-  // 检查游戏结束（将/帅被吃）
   if (xiangqiIsGameOver()) {
-    // 当前玩家的对手被吃了，当前玩家赢
     utils.endGame(state.currentPlayer);
     return true;
   }
 
-  // 切换玩家
+  var prevPlayer = state.currentPlayer;
   state.currentPlayer = state.currentPlayer === 1 ? 2 : 1;
+
+  if (xiangqiIsStalemate(state.currentPlayer)) {
+    utils.endGame(prevPlayer);
+    return true;
+  }
+
+  if (xiangqiNoAttackPieces()) {
+    state.gameOver = true;
+    state.winner = 0;
+    state.chatMessages.push('双方均无进攻子力，判和！');
+    return true;
+  }
+
+  if (xiangqiIsInCheck(state.currentPlayer)) {
+    state.chatMessages.push((state.currentPlayer === 1 ? '红' : '黑') + '方被将军！');
+  }
+
   state.isMyTurn = true;
   state.selectedPiece = null;
   state.validMoves = [];
@@ -415,58 +421,313 @@ function xiangqiMovePiece(x, y) {
     state.isMyTurn = false;
     utils.scheduleAiMove();
   }
-
   return true;
 }
 
-// 检查游戏是否结束
 function xiangqiIsGameOver() {
-  // 检查对方的将/帅是否还在
+  var opponentColor = state.currentPlayer === 1 ? 2 : 1;
   for (var y = 0; y < 10; y++) {
     for (var x = 0; x < 9; x++) {
       var piece = state.board[y][x];
-      if (piece === 25 || piece === 15) { // 将或帅
-        if (xiangqiPieceColor(piece) === state.currentPlayer) {
-          return false; // 对方的将/帅还在
-        }
+      if (piece === 25 || piece === 15) {
+        if (xiangqiPieceColor(piece) === opponentColor) return false;
       }
     }
   }
   return true;
 }
 
-// AI落子
+function xiangqiIsStalemate(color) {
+  for (var y = 0; y < 10; y++) {
+    for (var x = 0; x < 9; x++) {
+      var piece = state.board[y][x];
+      if (piece !== 0 && xiangqiPieceColor(piece) === color) {
+        if (xiangqiGetValidMoves(x, y).length > 0) return false;
+      }
+    }
+  }
+  return true;
+}
+
+function xiangqiNoAttackPieces() {
+  var redHas = false, blackHas = false;
+  for (var y = 0; y < 10; y++) {
+    for (var x = 0; x < 9; x++) {
+      var piece = state.board[y][x];
+      if (piece !== 0) {
+        var type = piece % 10;
+        if (type === 1 || type === 2 || type === 6) {
+          if (xiangqiPieceColor(piece) === 1) redHas = true;
+          else blackHas = true;
+        }
+      }
+    }
+  }
+  return !redHas && !blackHas;
+}
+
+// ============================================================
+// 大师级象棋AI评估系统
+// ============================================================
+
+var XIANGQI_VALUES = {
+  PIECE_BASE: { 1: 1000, 2: 400, 3: 200, 4: 180, 5: 50000, 6: 450, 7: 30 },
+  CROSSED_PAWN: 80,
+  FIRST_MOVER_BONUS: 0.03,
+  KILL_BONUS: 300
+};
+
+function xiangqiGetGamePhase() {
+  var moveCount = state.moveHistory ? state.moveHistory.length : 0;
+  if (moveCount < 30) return 'opening';
+  if (moveCount < 90) return 'middlegame';
+  return 'endgame';
+}
+
+function xiangqiFindKing(color) {
+  var kingPiece = color === 1 ? 15 : 25;
+  for (var y = 0; y < 10; y++) {
+    for (var x = 0; x < 9; x++) {
+      if (state.board[y][x] === kingPiece) return { x: x, y: y };
+    }
+  }
+  return null;
+}
+
+function xiangqiEvalChariot(x, y, color) {
+  var score = XIANGQI_VALUES.PIECE_BASE[1];
+  var opponentColor = color === 1 ? 2 : 1;
+  if (x >= 3 && x <= 5) score += 150;
+  var oppKing = xiangqiFindKing(opponentColor);
+  if (oppKing && Math.abs(x - oppKing.x) <= 2) score += 180;
+  // 双车联攻
+  for (var cy = 0; cy < 10; cy++) {
+    for (var cx = 0; cx < 9; cx++) {
+      if (state.board[cy][cx] === (color * 10 + 1) && (cx !== x || cy !== y)) {
+        score += 220;
+      }
+    }
+  }
+  // 车低头
+  if ((color === 1 && y <= 2) || (color === 2 && y >= 7)) score -= 130;
+  return score;
+}
+
+function xiangqiEvalHorse(x, y, color) {
+  var score = XIANGQI_VALUES.PIECE_BASE[2];
+  var goodPos = [[2,2],[6,2],[2,7],[6,7],[3,3],[5,3],[3,6],[5,6],[4,4],[4,5]];
+  for (var i = 0; i < goodPos.length; i++) {
+    if (x === goodPos[i][0] && y === goodPos[i][1]) { score += 125; break; }
+  }
+  // 双马连环
+  for (var cy = 0; cy < 10; cy++) {
+    for (var cx = 0; cx < 9; cx++) {
+      if (state.board[cy][cx] === (color * 10 + 2) && (cx !== x || cy !== y)) {
+        if (Math.abs(cx - x) <= 2 && Math.abs(cy - y) <= 2) score += 100;
+      }
+    }
+  }
+  return score;
+}
+
+function xiangqiEvalCannon(x, y, color) {
+  var score = XIANGQI_VALUES.PIECE_BASE[6];
+  var phase = xiangqiGetGamePhase();
+  if (phase === 'endgame') score = Math.floor(score * 0.7);
+  if (x === 4) score += 135;
+  // 双炮联攻
+  var cannonCount = 0;
+  for (var cy = 0; cy < 10; cy++) {
+    for (var cx = 0; cx < 9; cx++) {
+      if (state.board[cy][cx] === (color * 10 + 6)) cannonCount++;
+    }
+  }
+  if (cannonCount >= 2) score += 165;
+  return score;
+}
+
+function xiangqiEvalGuardElephant(type, color) {
+  var score = XIANGQI_VALUES.PIECE_BASE[type];
+  var count = 0;
+  for (var cy = 0; cy < 10; cy++) {
+    for (var cx = 0; cx < 9; cx++) {
+      var p = state.board[cy][cx];
+      if (p !== 0 && xiangqiPieceColor(p) === color && p % 10 === type) count++;
+    }
+  }
+  if (count >= 2) score += 90;
+  else score -= 120;
+  return score;
+}
+
+function xiangqiEvalPawn(x, y, color) {
+  var score = XIANGQI_VALUES.PIECE_BASE[7];
+  var phase = xiangqiGetGamePhase();
+  var crossed = (color === 1 && y <= 4) || (color === 2 && y >= 5);
+  if (crossed) {
+    score = XIANGQI_VALUES.CROSSED_PAWN;
+    if (x === 3 || x === 5) score += 75;
+  }
+  if (phase === 'endgame') score = Math.floor(score * 1.4);
+  return score;
+}
+
+function xiangqiEvaluateBoard(myColor) {
+  var opponentColor = myColor === 1 ? 2 : 1;
+  var phase = xiangqiGetGamePhase();
+  var score = 0;
+
+  for (var y = 0; y < 10; y++) {
+    for (var x = 0; x < 9; x++) {
+      var piece = state.board[y][x];
+      if (piece === 0) continue;
+      var type = piece % 10;
+      var color = xiangqiPieceColor(piece);
+      var value = 0;
+
+      if (type === 1) value = xiangqiEvalChariot(x, y, color);
+      else if (type === 2) value = xiangqiEvalHorse(x, y, color);
+      else if (type === 6) value = xiangqiEvalCannon(x, y, color);
+      else if (type === 3) value = xiangqiEvalGuardElephant(3, color);
+      else if (type === 4) value = xiangqiEvalGuardElephant(4, color);
+      else if (type === 7) value = xiangqiEvalPawn(x, y, color);
+      else if (type === 5) value = XIANGQI_VALUES.PIECE_BASE[5];
+
+      if (color === myColor) score += value;
+      else score -= value;
+    }
+  }
+
+  if (myColor === 1) score = Math.floor(score * 1.03);
+  if (xiangqiIsInCheck(opponentColor)) score += XIANGQI_VALUES.KILL_BONUS;
+  if (xiangqiIsInCheck(myColor)) score -= XIANGQI_VALUES.KILL_BONUS;
+  if (phase === 'opening') score = Math.floor(score * 1.1);
+  else if (phase === 'endgame') score = Math.floor(score * 1.14);
+
+  return score;
+}
+
+function xiangqiGetAllMoves(color) {
+  var allMoves = [];
+  for (var y = 0; y < 10; y++) {
+    for (var x = 0; x < 9; x++) {
+      var piece = state.board[y][x];
+      if (piece !== 0 && xiangqiPieceColor(piece) === color) {
+        var moves = xiangqiGetValidMoves(x, y);
+        for (var i = 0; i < moves.length; i++) {
+          allMoves.push({ fromX: x, fromY: y, toX: moves[i].x, toY: moves[i].y, piece: piece });
+        }
+      }
+    }
+  }
+  return allMoves;
+}
+
+function xiangqiCheckForcedKill(myColor) {
+  var opponentColor = myColor === 1 ? 2 : 1;
+  var allMoves = xiangqiGetAllMoves(myColor);
+
+  for (var i = 0; i < allMoves.length; i++) {
+    var m = allMoves[i];
+    var piece = state.board[m.fromY][m.fromX];
+    var captured = state.board[m.toY][m.toX];
+
+    state.board[m.toY][m.toX] = piece;
+    state.board[m.fromY][m.fromX] = 0;
+
+    var isCheckmate = xiangqiIsInCheck(opponentColor) && xiangqiGetAllMoves(opponentColor).length === 0;
+
+    state.board[m.fromY][m.fromX] = piece;
+    state.board[m.toY][m.toX] = captured;
+
+    if (isCheckmate) return { hasKill: true, move: m };
+  }
+  return { hasKill: false, move: null };
+}
+
 function xiangqiAiMove() {
   if (state.gameOver) return;
 
   var s = state.settings.xiangqiMode;
   var myColor = s.playerColor === 1 ? 2 : 1;
 
-  // 简单AI：随机选择一个有效移动
-  var validPieces = [];
-  for (var y = 0; y < 10; y++) {
-    for (var x = 0; x < 9; x++) {
-      var piece = state.board[y][x];
-      if (piece !== 0 && xiangqiPieceColor(piece) === myColor) {
-        var moves = xiangqiGetValidMoves(x, y);
-        if (moves.length > 0) {
-          validPieces.push({ x: x, y: y, moves: moves });
-        }
-      }
-    }
+  var killResult = xiangqiCheckForcedKill(myColor);
+  if (killResult.hasKill && killResult.move) {
+    state.selectedPiece = { x: killResult.move.fromX, y: killResult.move.fromY };
+    state.validMoves = xiangqiGetValidMoves(killResult.move.fromX, killResult.move.fromY);
+    xiangqiMovePiece(killResult.move.toX, killResult.move.toY);
+    return;
   }
 
-  if (validPieces.length === 0) {
-    // AI无法移动，玩家赢
+  var allMoves = xiangqiGetAllMoves(myColor);
+  if (allMoves.length === 0) {
     utils.endGame(s.playerColor);
     return;
   }
 
-  var piece = validPieces[Math.floor(Math.random() * validPieces.length)];
-  var move = piece.moves[Math.floor(Math.random() * piece.moves.length)];
+  var bestMove = xiangqiSelectBestMove(allMoves, myColor, s.difficulty);
+  state.selectedPiece = { x: bestMove.fromX, y: bestMove.fromY };
+  state.validMoves = xiangqiGetValidMoves(bestMove.fromX, bestMove.fromY);
+  xiangqiMovePiece(bestMove.toX, bestMove.toY);
+}
 
-  state.selectedPiece = { x: piece.x, y: piece.y };
-  xiangqiMovePiece(move.x, move.y);
+function xiangqiSelectBestMove(moves, myColor, difficulty) {
+  var depth = difficulty === 'easy' ? 2 : 3;
+  var randomFactor = difficulty === 'easy' ? 0.4 : difficulty === 'normal' ? 0.15 : 0;
+
+  for (var i = 0; i < moves.length; i++) {
+    moves[i].score = xiangqiEvaluateMoveDeep(moves[i], myColor, depth);
+  }
+
+  moves.sort(function(a, b) { return b.score - a.score; });
+
+  if (randomFactor > 0) {
+    var topCount = Math.max(1, Math.floor(moves.length * randomFactor));
+    return moves[Math.floor(Math.random() * topCount)];
+  }
+  return moves[0];
+}
+
+function xiangqiEvaluateMoveDeep(move, myColor, depth) {
+  var piece = state.board[move.fromY][move.fromX];
+  var captured = state.board[move.toY][move.toX];
+
+  state.board[move.toY][move.toX] = piece;
+  state.board[move.fromY][move.fromX] = 0;
+
+  var score = depth <= 1 ? xiangqiEvaluateBoard(myColor) : -xiangqiMinimax(depth - 1, myColor === 1 ? 2 : 1, -1000000, 1000000);
+
+  state.board[move.fromY][move.fromX] = piece;
+  state.board[move.toY][move.toX] = captured;
+
+  return score;
+}
+
+function xiangqiMinimax(depth, color, alpha, beta) {
+  if (depth === 0) return xiangqiEvaluateBoard(color);
+
+  var allMoves = xiangqiGetAllMoves(color);
+  if (allMoves.length === 0) return -50000 + depth * 1000;
+
+  var maxScore = -1000000;
+  for (var i = 0; i < allMoves.length; i++) {
+    var m = allMoves[i];
+    var piece = state.board[m.fromY][m.fromX];
+    var captured = state.board[m.toY][m.toX];
+
+    state.board[m.toY][m.toX] = piece;
+    state.board[m.fromY][m.fromX] = 0;
+
+    var score = -xiangqiMinimax(depth - 1, color === 1 ? 2 : 1, -beta, -alpha);
+
+    state.board[m.fromY][m.fromX] = piece;
+    state.board[m.toY][m.toX] = captured;
+
+    if (score > maxScore) maxScore = score;
+    if (score > alpha) alpha = score;
+    if (alpha >= beta) break;
+  }
+  return maxScore;
 }
 
 module.exports = {
@@ -475,5 +736,7 @@ module.exports = {
   xiangqiMovePiece: xiangqiMovePiece,
   xiangqiGetValidMoves: xiangqiGetValidMoves,
   xiangqiPieceName: xiangqiPieceName,
-  xiangqiAiMove: xiangqiAiMove
+  xiangqiAiMove: xiangqiAiMove,
+  xiangqiIsInCheck: xiangqiIsInCheck,
+  xiangqiIsStalemate: xiangqiIsStalemate
 };

@@ -421,8 +421,13 @@ function drawBoard() {
     stars = [[3, 3], [3, 9], [3, 15], [9, 3], [9, 9], [9, 15], [15, 3], [15, 9], [15, 15]];
   } else if (bs === 13) {
     stars = [[3, 3], [3, 9], [9, 3], [9, 9], [6, 6]];
+  } else if (bs === 15) {
+    // 五子棋 15x15：天元 + 四角星
+    stars = [[3, 3], [3, 11], [7, 7], [11, 3], [11, 11]];
+  } else if (bs === 9) {
+    stars = [[2, 2], [2, 6], [4, 4], [6, 2], [6, 6]];
   } else {
-    stars = [[2, 2], [2, 6], [6, 2], [6, 6], [4, 4]];
+    stars = [];
   }
 
   ctx.fillStyle = lineColor;
@@ -469,34 +474,15 @@ function drawXiangqiBoard() {
   ctx.lineWidth = 2;
   ctx.strokeRect(bL, bT, lineLen, boardH);
 
-  // 绘制河（楚河汉界）
+  // 楚河汉界文字（不绘制实线和虚线）
   var riverY = bT + 4.5 * cs;
-  
-  // 河的虚线
-  ctx.strokeStyle = '#8B4513';
-  ctx.lineWidth = 1;
-  ctx.setLineDash([5, 5]);
-  ctx.beginPath();
-  ctx.moveTo(bL, riverY);
-  ctx.lineTo(bL + lineLen, riverY);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  // 楚河汉界文字
   ctx.fillStyle = '#8B4513';
   ctx.font = 'bold ' + (cs * 0.5) + 'px Arial';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   
-  // 左边"楚"
-  ctx.fillText('楚', bL + lineLen * 0.25, riverY);
-  // 右边"汉"
-  ctx.fillText('汉', bL + lineLen * 0.75, riverY);
-  
-  // 中间"河"和"界"
-  ctx.font = (cs * 0.35) + 'px Arial';
-  ctx.fillText('河', bL + lineLen * 0.45, riverY - cs * 0.25);
-  ctx.fillText('界', bL + lineLen * 0.55, riverY + cs * 0.25);
+  ctx.fillText('楚 河', bL + lineLen * 0.25, riverY);
+  ctx.fillText('汉 界', bL + lineLen * 0.75, riverY);
 
   // 绘制宫（九宫格）
   ctx.strokeStyle = '#8B4513';
@@ -744,6 +730,38 @@ function drawXiangqiPieces() {
       ctx.arc(mx, my, moveRadius * 0.4, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+
+  // 绘制最后一步棋的提示
+  if (state.lastMove) {
+    var fromX = bL + state.lastMove.from.x * cs;
+    var fromY = bT + state.lastMove.from.y * cs;
+    var toX = bL + state.lastMove.to.x * cs;
+    var toY = bT + state.lastMove.to.y * cs;
+
+    // 起点标记（空心圆，表示棋子原来的位置）
+    ctx.strokeStyle = '#4CAF50';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(fromX, fromY, cs * 0.35, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 终点标记（圆框，表示棋子移动到的位置）
+    ctx.strokeStyle = '#4CAF50';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(toX, toY, cs * 0.42, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 连接线（从起点到终点，显示移动方向）
+    ctx.strokeStyle = 'rgba(76, 175, 80, 0.6)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(fromX, fromY);
+    ctx.lineTo(toX, toY);
+    ctx.stroke();
+    ctx.setLineDash([]);
   }
 }
 
