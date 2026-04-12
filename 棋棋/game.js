@@ -523,26 +523,91 @@ function drawCheckersBoard() {
   var bT = state.LAYOUT.boardTop;
   var cs = state.CONFIG.CELL_SIZE;
 
-  // 每一行的点位数
   var ROW_COUNTS = [1, 2, 3, 4, 13, 12, 11, 10, 9, 10, 11, 12, 13, 4, 3, 2, 1];
 
-  // 绘制跳棋棋盘
+  // 绘制背景
   ctx.fillStyle = '#E8D4B8';
-  ctx.strokeStyle = '#8B6F47';
-  ctx.lineWidth = 1;
+  ctx.fillRect(bL - cs, bT - cs, 13 * cs + cs * 2, 17 * cs * 0.866 + cs * 2);
 
+  // 绘制六边形连接线和营地背景
+  ctx.strokeStyle = '#C4A882';
+  ctx.lineWidth = 1.5;
+
+  // 行内连接线（相邻列之间）
+  for (var y = 0; y < 17; y++) {
+    var count = ROW_COUNTS[y];
+    var startCol = Math.floor((13 - count) / 2);
+    for (var i = 0; i < count - 1; i++) {
+      var col = startCol + i;
+      var px1 = bL + col * cs + (y % 2) * cs / 2;
+      var py1 = bT + y * cs * 0.866;
+      var px2 = bL + (col + 1) * cs + (y % 2) * cs / 2;
+      var py2 = py1;
+      ctx.beginPath();
+      ctx.moveTo(px1, py1);
+      ctx.lineTo(px2, py2);
+      ctx.stroke();
+    }
+  }
+
+  // 上下行之间斜向连接线（构成六边形网格）
+  var dirsEven = [[1, 0], [1, -1], [-1, 0], [-1, -1]];
+  var dirsOdd = [[1, 1], [1, 0], [-1, 1], [-1, 0]];
+  for (var y = 0; y < 17; y++) {
+    var count = ROW_COUNTS[y];
+    var startCol = Math.floor((13 - count) / 2);
+    var dirs = (y % 2 === 0) ? dirsEven : dirsOdd;
+    for (var i = 0; i < count; i++) {
+      var col = startCol + i;
+      var px = bL + col * cs + (y % 2) * cs / 2;
+      var py = bT + y * cs * 0.866;
+      for (var d = 0; d < 4; d++) {
+        var ny = y + dirs[d][0];
+        var ncol = col + dirs[d][1];
+        if (ny < 0 || ny >= 17) continue;
+        var nc = ROW_COUNTS[ny];
+        var ns = Math.floor((13 - nc) / 2);
+        if (ncol < ns || ncol >= ns + nc) continue;
+        var npx = bL + ncol * cs + (ny % 2) * cs / 2;
+        var npy = bT + ny * cs * 0.866;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(npx, npy);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // 绘制六边形圆点格子 + 营地背景
   for (var y = 0; y < 17; y++) {
     var count = ROW_COUNTS[y];
     var startCol = Math.floor((13 - count) / 2);
     for (var i = 0; i < count; i++) {
-      var x = startCol + i;
-      // 六边形网格坐标转换为屏幕坐标
-      var px = bL + x * cs + (y % 2) * cs / 2;
+      var col = startCol + i;
+      var px = bL + col * cs + (y % 2) * cs / 2;
       var py = bT + y * cs * 0.866;
 
-      // 绘制六边形格子
+      // 营地着色（底部和顶部三角形区域）
+      var campRows1 = (y >= 13 && col >= 4 && col <= 7);  // 南营地
+      var campRows2 = (y <= 3 && col >= 4 && col <= 7);   // 北营地
+      var campRows3 = (y >= 1 && y <= 3 && col >= 0 && col <= 3); // 西北
+      var campRows4 = (y >= 1 && y <= 3 && col >= 9 && col <= 12); // 东北
+      var campRows5 = (y >= 13 && y <= 15 && col >= 0 && col <= 3); // 西南
+      var campRows6 = (y >= 13 && y <= 15 && col >= 9 && col <= 12); // 东南
+      var isCamp = campRows1 || campRows2 || campRows3 || campRows4 || campRows5 || campRows6;
+      if (isCamp) {
+        ctx.fillStyle = 'rgba(180,220,255,0.35)';
+        ctx.beginPath();
+        ctx.arc(px, py, cs * 0.42, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 圆点
+      ctx.fillStyle = isCamp ? '#AACCFF' : '#D4B896';
+      ctx.strokeStyle = '#8B6F47';
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(px, py, cs * 0.4, 0, Math.PI * 2);
+      ctx.arc(px, py, cs * 0.38, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     }
@@ -712,31 +777,6 @@ function drawXiangqiPieces() {
         ctx.arc(px, py, radius + 5, 0, Math.PI * 2);
         ctx.stroke();
       }
-    }
-  }
-
-  // 绘制有效移动点（虚线圆圈）
-  if (state.selectedPiece && state.validMoves.length > 0) {
-    for (var i = 0; i < state.validMoves.length; i++) {
-      var move = state.validMoves[i];
-      var mx = bL + move.x * cs;
-      var my = bT + move.y * cs;
-      var moveRadius = cs * 0.25;
-
-      // 虚线圆圈
-      ctx.strokeStyle = '#ffd700';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.arc(mx, my, moveRadius, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // 中心点
-      ctx.fillStyle = 'rgba(255, 215, 0, 0.5)';
-      ctx.beginPath();
-      ctx.arc(mx, my, moveRadius * 0.4, 0, Math.PI * 2);
-      ctx.fill();
     }
   }
 
@@ -1094,11 +1134,90 @@ function drawJunqiBoard() {
   var bT = state.LAYOUT.boardTop;
   var cs = state.CONFIG.CELL_SIZE;
 
-  // 绘制5x12棋盘
-  ctx.strokeStyle = '#8B4513';
-  ctx.lineWidth = 2;
+  // 底色（木纹背景）
+  ctx.fillStyle = '#D2B48C';
+  ctx.fillRect(bL, bT, 4 * cs, 12 * cs);
 
-  // 横线
+  // === 铁路线（米字铁路）===
+  ctx.strokeStyle = '#8B4513';
+  ctx.lineWidth = 2.5;
+  ctx.setLineDash([]);
+
+  // 铁路：两条横线（row 4 和 row 7 的中心线）
+  // row 4: y=4, row 7: y=7（0-indexed），中心线在格子中间
+  var r4 = bT + 4 * cs + cs / 2;  // 第4行中心
+  var r7 = bT + 7 * cs + cs / 2;  // 第7行中心
+
+  // 水平铁路
+  ctx.beginPath();
+  ctx.moveTo(bL, r4);
+  ctx.lineTo(bL + 4 * cs, r4);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(bL, r7);
+  ctx.lineTo(bL + 4 * cs, r7);
+  ctx.stroke();
+
+  // 斜向铁路：从角落出发，穿过中线
+  // 左上角 -> 中线
+  ctx.beginPath();
+  ctx.moveTo(bL, bT);
+  ctx.lineTo(bL + 2 * cs, r4);
+  ctx.stroke();
+  // 中线 -> 右上角
+  ctx.beginPath();
+  ctx.moveTo(bL + 2 * cs, r4);
+  ctx.lineTo(bL + 4 * cs, bT);
+  ctx.stroke();
+
+  // 左下角 -> 中线
+  ctx.beginPath();
+  ctx.moveTo(bL, bT + 11 * cs);
+  ctx.lineTo(bL + 2 * cs, r7);
+  ctx.stroke();
+  // 中线 -> 右下角
+  ctx.beginPath();
+  ctx.moveTo(bL + 2 * cs, r7);
+  ctx.lineTo(bL + 4 * cs, bT + 11 * cs);
+  ctx.stroke();
+
+  // === 大本营（红色虚线框）===
+  ctx.strokeStyle = '#cc0000';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 4]);
+
+  // 红方大本营：左上角和右上角（行列坐标在角上格子）
+  ctx.strokeRect(bL + 0.1 * cs, bT + 0.1 * cs, cs * 0.8, cs * 0.8);
+  ctx.strokeRect(bL + 3.1 * cs, bT + 0.1 * cs, cs * 0.8, cs * 0.8);
+
+  // 蓝方大本营：左下角和右下角
+  ctx.strokeRect(bL + 0.1 * cs, bT + 10.1 * cs, cs * 0.8, cs * 0.8);
+  ctx.strokeRect(bL + 3.1 * cs, bT + 10.1 * cs, cs * 0.8, cs * 0.8);
+
+  ctx.setLineDash([]);
+
+  // === 行营（浅蓝色保护格）===
+  var campColor = 'rgba(100, 180, 255, 0.35)';
+  ctx.fillStyle = campColor;
+  // 红方行营：5格
+  ctx.fillRect(bL + 0.1 * cs, bT + 4.1 * cs, cs * 0.8, cs * 0.8);
+  ctx.fillRect(bL + 1.1 * cs, bT + 4.1 * cs, cs * 0.8, cs * 0.8);
+  ctx.fillRect(bL + 2.1 * cs, bT + 4.1 * cs, cs * 0.8, cs * 0.8);
+  ctx.fillRect(bL + 1.1 * cs, bT + 5.1 * cs, cs * 0.8, cs * 0.8);
+  ctx.fillRect(bL + 2.1 * cs, bT + 5.1 * cs, cs * 0.8, cs * 0.8);
+  // 蓝方行营：5格
+  ctx.fillRect(bL + 1.1 * cs, bT + 6.1 * cs, cs * 0.8, cs * 0.8);
+  ctx.fillRect(bL + 2.1 * cs, bT + 6.1 * cs, cs * 0.8, cs * 0.8);
+  ctx.fillRect(bL + 0.1 * cs, bT + 7.1 * cs, cs * 0.8, cs * 0.8);
+  ctx.fillRect(bL + 1.1 * cs, bT + 7.1 * cs, cs * 0.8, cs * 0.8);
+  ctx.fillRect(bL + 2.1 * cs, bT + 7.1 * cs, cs * 0.8, cs * 0.8);
+
+  // === 基础棋盘格子线 ===
+  ctx.strokeStyle = '#8B4513';
+  ctx.lineWidth = 1;
+
+  // 横线（12条完整横线，但跳过行营区域做视觉美化）
   for (var y = 0; y <= 12; y++) {
     ctx.beginPath();
     ctx.moveTo(bL, bT + y * cs);
@@ -1106,22 +1225,70 @@ function drawJunqiBoard() {
     ctx.stroke();
   }
 
-  // 竖线
-  for (var x = 0; x <= 5; x++) {
+  // 竖线（5条）
+  for (var x = 0; x <= 4; x++) {
     ctx.beginPath();
     ctx.moveTo(bL + x * cs, bT);
     ctx.lineTo(bL + x * cs, bT + 12 * cs);
     ctx.stroke();
   }
 
-  // 中间区域（河界）
-  ctx.fillStyle = '#E8D4B8';
-  ctx.fillRect(bL, bT + 5 * cs, 5 * cs, 2 * cs);
+  // === 兵站线（小竖线标记）===
+  ctx.strokeStyle = '#8B4513';
+  ctx.lineWidth = 1;
+  // 在非铁路行的特定列画小竖线（兵站标记）
+  for (var y = 1; y <= 3; y++) {
+    ctx.beginPath();
+    ctx.moveTo(bL + 0.5 * cs, bT + y * cs - 3);
+    ctx.lineTo(bL + 0.5 * cs, bT + y * cs + 3);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bL + 1.5 * cs, bT + y * cs - 3);
+    ctx.lineTo(bL + 1.5 * cs, bT + y * cs + 3);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bL + 2.5 * cs, bT + y * cs - 3);
+    ctx.lineTo(bL + 2.5 * cs, bT + y * cs + 3);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bL + 3.5 * cs, bT + y * cs - 3);
+    ctx.lineTo(bL + 3.5 * cs, bT + y * cs + 3);
+    ctx.stroke();
+  }
+  for (var y = 8; y <= 10; y++) {
+    ctx.beginPath();
+    ctx.moveTo(bL + 0.5 * cs, bT + y * cs - 3);
+    ctx.lineTo(bL + 0.5 * cs, bT + y * cs + 3);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bL + 1.5 * cs, bT + y * cs - 3);
+    ctx.lineTo(bL + 1.5 * cs, bT + y * cs + 3);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bL + 2.5 * cs, bT + y * cs - 3);
+    ctx.lineTo(bL + 2.5 * cs, bT + y * cs + 3);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bL + 3.5 * cs, bT + y * cs - 3);
+    ctx.lineTo(bL + 3.5 * cs, bT + y * cs + 3);
+    ctx.stroke();
+  }
+
+  // === 铁路装饰圆点 ===
   ctx.fillStyle = '#8B4513';
-  ctx.font = (cs * 0.5) + 'px Arial';
-  ctx.textAlign = 'center';
-  ctx.fillText('楚河', bL + cs * 1.5, bT + 6 * cs);
-  ctx.fillText('汉界', bL + cs * 3.5, bT + 6 * cs);
+  var intersections = [
+    [0, 0], [2, 0], [4, 0],
+    [0, 4], [2, 4], [4, 4],
+    [0, 7], [2, 7], [4, 7],
+    [0, 11], [2, 11], [4, 11]
+  ];
+  for (var i = 0; i < intersections.length; i++) {
+    var ix = bL + intersections[i][0] * cs;
+    var iy = bT + intersections[i][1] * cs;
+    ctx.beginPath();
+    ctx.arc(ix, iy, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 // ===== 绘制军棋棋子 =====
@@ -1131,6 +1298,9 @@ function drawJunqiPieces() {
   var bT = state.LAYOUT.boardTop;
   var cs = state.CONFIG.CELL_SIZE;
 
+  // 棋子名字映射
+  var names = ['', '工', '排', '连', '营', '团', '旅', '师', '军', '司', '炸', '雷', '旗'];
+
   for (var y = 0; y < 12; y++) {
     for (var x = 0; x < 5; x++) {
       var piece = state.board[y][x];
@@ -1138,63 +1308,122 @@ function drawJunqiPieces() {
 
       var color = junqi.getPieceColor(piece);
       var type = junqi.getPieceType(piece);
-      var px = bL + x * cs;
-      var py = bT + y * cs;
-      var radius = cs * 0.4;
 
-      // 选中效果
+      // 长方形棋子参数（立着的竖长方形）
+      var pW = cs * 0.65;   // 棋子宽度
+      var pH = cs * 0.82;   // 棋子高度（比格子略高一点）
+      var px = bL + x * cs;       // 格子中心
+      var py = bT + y * cs;
+      var rx = px - pW / 2;       // 矩形左上 x
+      var ry = py - pH / 2;       // 矩形左上 y
+
+      // 选中效果：稍微上抬
       var isSelected = state.selectedPiece && state.selectedPiece.x === x && state.selectedPiece.y === y;
       if (isSelected) {
-        py -= cs * 0.1;
+        ry -= cs * 0.08;
       }
 
-      // 棋子背景
-      ctx.fillStyle = color === 1 ? '#ff4444' : '#4444ff';
+      // ---- 阴影 ----
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
       ctx.beginPath();
-      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      roundRect2(ctx, rx + 1.5, ry + 1.5, pW, pH, cs * 0.08);
       ctx.fill();
 
-      // 棋子边框
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2;
+      // ---- 棋子主体 ----
+      var grad = ctx.createLinearGradient(rx, ry, rx + pW, ry);
+      if (color === 1) {
+        // 红方：深红 -> 亮红
+        grad.addColorStop(0, '#cc1111');
+        grad.addColorStop(0.5, '#ee3333');
+        grad.addColorStop(1, '#aa0000');
+      } else {
+        // 蓝方：深蓝 -> 亮蓝
+        grad.addColorStop(0, '#0033aa');
+        grad.addColorStop(0.5, '#2255cc');
+        grad.addColorStop(1, '#002288');
+      }
+      ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      roundRect2(ctx, rx, ry, pW, pH, cs * 0.08);
+      ctx.fill();
+
+      // ---- 棋子边框 ----
+      ctx.strokeStyle = color === 1 ? '#ffaaaa' : '#aaccff';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      roundRect2(ctx, rx, ry, pW, pH, cs * 0.08);
       ctx.stroke();
 
-      // 棋子名称
-      var names = ['', '工', '排', '连', '营', '团', '旅', '师', '军', '司', '炸', '雷', '旗'];
+      // ---- 棋子顶部高光 ----
+      var hx = rx + pW * 0.12;
+      var hy = ry + pH * 0.08;
+      var hw = pW * 0.76;
+      var hh = pH * 0.18;
+      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      ctx.beginPath();
+      roundRect2(ctx, hx, hy, hw, hh, cs * 0.04);
+      ctx.fill();
+
+      // ---- 棋子文字 ----
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold ' + (cs * 0.35) + 'px Arial';
+      ctx.font = 'bold ' + (pH * 0.58) + 'px Arial';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(names[type], px, py);
+      ctx.fillText(names[type], px, py + 1);
 
-      // 选中高亮
+      // ---- 选中高亮（金色描边）----
       if (isSelected) {
         ctx.strokeStyle = '#ffd700';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(px, py, radius + 3, 0, Math.PI * 2);
+        roundRect2(ctx, rx - 3, ry - 3, pW + 6, pH + 6, cs * 0.1);
         ctx.stroke();
       }
     }
   }
 
-  // 有效移动点
+  // 有效移动提示（虚线菱形/方框）
   if (state.selectedPiece && state.validMoves.length > 0) {
     for (var i = 0; i < state.validMoves.length; i++) {
       var move = state.validMoves[i];
       var mx = bL + move.x * cs;
       var my = bT + move.y * cs;
+      var mW = cs * 0.55;
+      var mH = cs * 0.65;
 
       ctx.strokeStyle = '#ffd700';
       ctx.lineWidth = 2;
-      ctx.setLineDash([4, 4]);
+      ctx.setLineDash([5, 4]);
       ctx.beginPath();
-      ctx.arc(mx, my, cs * 0.2, 0, Math.PI * 2);
+      roundRect2(ctx, mx - mW / 2, my - mH / 2, mW, mH, cs * 0.07);
       ctx.stroke();
       ctx.setLineDash([]);
+
+      // 中心小点
+      ctx.fillStyle = 'rgba(255,215,0,0.45)';
+      ctx.beginPath();
+      ctx.arc(mx, my, cs * 0.12, 0, Math.PI * 2);
+      ctx.fill();
     }
+  }
+}
+
+// 圆角矩形辅助函数
+function roundRect2(ctx, x, y, w, h, r) {
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x, y, w, h, r);
+  } else {
+    var r2 = Math.min(w, h, r * 2);
+    ctx.moveTo(x + r2, y);
+    ctx.lineTo(x + w - r2, y);
+    ctx.arcTo(x + w, y, x + w, y + r2, r2);
+    ctx.lineTo(x + w, y + h - r2);
+    ctx.arcTo(x + w, y + h, x + w - r2, y + h, r2);
+    ctx.lineTo(x + r2, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r2, r2);
+    ctx.lineTo(x, y + r2);
+    ctx.arcTo(x, y, x + r2, y, r2);
+    ctx.closePath();
   }
 }
 

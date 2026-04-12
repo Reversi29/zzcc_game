@@ -9,6 +9,9 @@ var go = null; // 延迟加载避免循环依赖
 
 // 初始化五子棋游戏
 function initGame() {
+  var menu = require('./menu.js');
+  menu.initBoardLayout();
+
   state.board = [];
   for (var y = 0; y < state.CONFIG.BOARD_SIZE; y++) {
     state.board[y] = [];

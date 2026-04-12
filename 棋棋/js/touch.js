@@ -287,6 +287,15 @@ function handleGameTouch(x, y) {
       } else if (state.gameType === 'xiangqi') {
         var xiangqi = require('./xiangqi.js');
         xiangqi.initXiangqiGame();
+      } else if (state.gameType === 'junqi') {
+        var junqi = require('./junqi.js');
+        junqi.initJunqiGame();
+      } else if (state.gameType === 'checkers') {
+        var checkers = require('./checkers.js');
+        checkers.initCheckersGame();
+      } else if (state.gameType === 'othello') {
+        var othello = require('./othello.js');
+        othello.initOthelloGame();
       } else {
         gomoku.initGame();
       }
@@ -591,6 +600,15 @@ function handleCheckersTouch(x, y) {
   if (piece !== 0) {
     if (piece === state.currentPlayer) {
       checkers.checkersSelectPiece(userX, userY);
+      // 调试：显示选中棋子坐标（只用内部坐标）
+      if (typeof tt !== 'undefined' && tt.showToast) {
+        tt.showToast({
+          title: '棋子位置: 行' + pos.row + ' 列' + pos.col,
+          icon: 'none',
+          duration: 1500
+        });
+      }
+      console.log('[跳棋] 选中 (' + pos.row + ',' + pos.col + ') 有效移动:', state.validMoves.length + '个');
     }
   }
 }

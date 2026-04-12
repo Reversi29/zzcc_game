@@ -173,16 +173,16 @@ function initBoardLayout() {
     state.LAYOUT.boardTop = topH + (availH - boardH) / 2;
     state.LAYOUT.boardPx = boardW;
   } else if (state.gameType === 'junqi') {
-    // 军棋：12行5列
+    // 军棋：12行5列（5列=5个格子=4个格宽+边缘）
     var maxCellH = availH / 12;
-    var maxCellW = (W - 40) / 4;
+    var maxCellW = (W - 40) / 5;  // 修正：5列对应/5，不是/4
     var cs = Math.min(maxCellH, maxCellW);
     
     state.CONFIG.BOARD_SIZE = 5;
     state.CONFIG.CELL_SIZE = cs;
     state.CONFIG.PIECE_RADIUS = cs * 0.4;
 
-    var boardW = cs * 4;
+    var boardW = cs * 4;   // 4个格宽（5列的4个间距）
     var boardH = cs * 12;
     
     state.LAYOUT.boardLeft = (W - boardW) / 2;

@@ -149,52 +149,49 @@ function checkersSetupBoard() {
   }
 }
 
-// 六边形网格方向（规则表，726方向对100%验证正确）
-// 六方向：0=E 1=W 2=SE 3=SW 4=NW 5=NE
-// 规则：
-//   E:  col+1
-//   W:  col-1
-//   SE: row+1, col+(row%2===1?1:0) — odd行+1列，even行不变
-//   SW: row+1, col+(row%2===1?0:-1) — odd行不变，even行-1列
-//   NW: row-1, col+(row%2===1?0:-1) — odd行不变，even行-1列
-//   NE: row-1, col+(row%2===1?1:0)  — odd行+1列，even行不变
+// 获取有效移动
+function checkersGetValidMoves(x, y) {
+  var moves = [];
+  var pos = userToBoard(x, y);
+  var piece = state.board[pos.row][pos.col];
+  if (piece === 0) return moves;
 
-var _DIR_TABLE = null;
+  // 六边形网格6方向（offset coordinates, 行偏移型）
+  // 偶数行/奇数行的偏移不同（因为列偏移了cs/2）
+  var dirsEven = [
+    [0, 1],    // 东（右）
+    [0, -1],   // 西（左）
+    [1, 0],    // 东南
+    [1, -1],   // 西南
+    [-1, 0],   // 东北
+    [-1, -1]   // 西北
+  ];
+  var dirsOdd = [
+    [0, 1],    // 东（右）
+    [0, -1],   // 西（左）
+    [1, 1],    // 东南
+    [1, 0],    // 西南
+    [-1, 0],   // 北（东北角邻居在偶数行上方）
+    [-1, -1]   // 西北
+  ];
 
-function buildDirTable() {
-  var ROW_COUNTS = [1,2,3,4,13,12,11,10,9,10,11,12,13,4,3,2,1];
-  function getRowStartCol(row) { return Math.floor((13 - ROW_COUNTS[row]) / 2); }
-  function isOnBoard(row, col) {
-    if (row < 0 || row >= 17) return false;
-    var sc = getRowStartCol(row);
-    return col >= sc && col < sc + ROW_COUNTS[row];
-  }
-  function getNeighborRaw(r, c, d) {
-    if (d === 0) return isOnBoard(r, c+1) ? {row:r, col:c+1} : null;
-    if (d === 1) return isOnBoard(r, c-1) ? {row:r, col:c-1} : null;
-    if (d === 2) { var nr=r+1, nc=c+(r%2===1?1:0);  return isOnBoard(nr,nc)?{row:nr,col:nc}:null; }
-    if (d === 3) { var nr=r+1, nc=c+(r%2===1?0:-1); return isOnBoard(nr,nc)?{row:nr,col:nc}:null; }
-    if (d === 4) { var nr=r-1, nc=c+(r%2===1?0:-1); return isOnBoard(nr,nc)?{row:nr,col:nc}:null; }
-    if (d === 5) { var nr=r-1, nc=c+(r%2===1?1:0);  return isOnBoard(nr,nc)?{row:nr,col:nc}:null; }
-    return null;
-  }
-  var table = {};
-  for (var r = 0; r < 17; r++) {
-    for (var c = getRowStartCol(r), max = c + ROW_COUNTS[r]; c < max; c++) {
-      table[r+','+c] = {};
-      for (var d = 0; d < 6; d++) {
-        table[r+','+c][['E','W','SE','SW','NW','NE'][d]] = getNeighborRaw(r, c, d);
-      }
+  var dirs = (pos.row % 2 === 0) ? dirsEven : dirsOdd;
+
+  // 普通移动（相邻空位）
+  for (var d = 0; d < 6; d++) {
+    var nx = pos.row + dirs[d][0];
+    var ny = pos.col + dirs[d][1];
+    if (!isOnBoard(nx, ny)) continue;
+    if (state.board[nx][ny] === 0) {
+      var startCol = getRowStartCol(nx);
+      moves.push({ x: nx + 1, y: ny - startCol + 1, isJump: false, row: nx, col: ny });
     }
   }
-  return table;
-}
 
-function getNeighbor(row, col, d) {
-  if (!_DIR_TABLE) _DIR_TABLE = buildDirTable();
-  var t = _DIR_TABLE[row+','+col];
-  if (!t) return null;
-  return t[['E','W','SE','SW','NW','NE'][d]] || null;
+  // 跳跃移动（含连续跳链）
+  checkersGetJumps(pos.row, pos.col, piece, moves, {});
+
+  return moves;
 }
 
 // 检查内部坐标(row,col)是否在棋盘有效范围内
@@ -205,82 +202,45 @@ function isOnBoard(row, col) {
   return col >= startCol && col < startCol + count;
 }
 
-// 检查(row,col)处是否有己方棋子
-function hasOwnPiece(row, col, player) {
-  if (!isOnBoard(row, col)) return false;
-  return state.board[row][col] === player;
-}
+// 获取跳跃移动（递归，连续跳链）
+// 中国跳棋规则：可跳过任意颜色棋子（己方/敌方均可），落点必须为空
+function checkersGetJumps(row, col, piece, moves, visited) {
+  var dirsEven = [
+    [0, 1], [0, -1], [1, 0], [1, -1], [-1, 0], [-1, -1]
+  ];
+  var dirsOdd = [
+    [0, 1], [0, -1], [1, 1], [1, 0], [-1, 0], [-1, -1]
+  ];
 
-// 检查(row,col)处是否有敌方棋子
-function hasEnemyPiece(row, col, player) {
-  if (!isOnBoard(row, col)) return false;
-  var p = state.board[row][col];
-  return p !== 0 && p !== player;
-}
+  for (var d = 0; d < 6; d++) {
+    var dirs1 = (row % 2 === 0) ? dirsEven : dirsOdd;
+    var nx = row + dirs1[d][0];    // 中间点（被跳过的棋子）
+    var ny = col + dirs1[d][1];
 
-// 检查(row,col)是否为空
-function isEmpty(row, col) {
-  if (!isOnBoard(row, col)) return false;
-  return state.board[row][col] === 0;
-}
+    if (!isOnBoard(nx, ny)) continue;
 
-// 获取所有合法移动（普通走子 + 跳跃）
-function checkersGetValidMoves(x, y) {
-  var moves = [];
-  var pos = userToBoard(x, y);
-  var piece = state.board[pos.row][pos.col];
-  if (piece === 0) return moves;
+    var dirs2 = (nx % 2 === 0) ? dirsEven : dirsOdd;
+    var jx = nx + dirs2[d][0];    // 落点
+    var jy = ny + dirs2[d][1];
 
-  // --- 找所有跳跃（含连续跳链）---
-  var jumps = [];
-  checkersGetJumps(pos.row, pos.col, piece, jumps, {});
-  for (var j = 0; j < jumps.length; j++) moves.push(jumps[j]);
+    if (!isOnBoard(jx, jy)) continue;
 
-  // --- 找普通走子（仅当没有跳跃时才能走）---
-  if (jumps.length === 0) {
-    for (var d = 0; d < 6; d++) {
-      var nb = getNeighbor(pos.row, pos.col, d);
-      if (isOnBoard(nb.row, nb.col) && state.board[nb.row][nb.col] === 0) {
-        var sc = getRowStartCol(nb.row);
-        moves.push({ x: nb.row + 1, y: nb.col - sc + 1, isJump: false, row: nb.row, col: nb.col });
+    if (state.board[nx][ny] !== 0 && state.board[jx][jy] === 0) {
+      var key = jx + ',' + jy;
+      if (!visited[key]) {
+        visited[key] = true;
+        var startCol = getRowStartCol(jx);
+        moves.push({
+          x: jx + 1, y: jy - startCol + 1,
+          isJump: true,
+          jumpX: nx + 1, jumpY: ny - getRowStartCol(nx) + 1,
+          row: jx, col: jy
+        });
+        // 调试日志
+        console.log('[跳棋跳跃] 起点(' + row + ',' + col + ') → 方向' + d + ' → 中间(' + nx + ',' + ny + ') → 落点(' + jx + ',' + jy + ')');
+        checkersGetJumps(jx, jy, piece, moves, visited);
       }
     }
-  }
-
-  return moves;
-}
-
-// 获取跳跃移动（递归，含连续跳链）
-// visited 记录已访问的"落点"，防止同链重复
-function checkersGetJumps(row, col, piece, moves, visited) {
-  for (var d = 0; d < 6; d++) {
-    // 1) 中间点：沿d方向走一步
-    var mid = getNeighbor(row, col, d);
-    if (!isOnBoard(mid.row, mid.col)) continue;
-    if (state.board[mid.row][mid.col] === 0) continue;  // 中间点必须有棋子
-
-    // 2) 落点：从中间点再沿d方向走一步
-    var land = getNeighbor(mid.row, mid.col, d);
-    if (!isOnBoard(land.row, land.col)) continue;
-    if (state.board[land.row][land.col] !== 0) continue;  // 落点必须空
-
-    var key = land.row + ',' + land.col;
-    if (visited[key]) continue;  // 同链不重复落点
-    visited[key] = true;
-
-    var sc = getRowStartCol(land.row);
-    moves.push({
-      x: land.row + 1,
-      y: land.col - sc + 1,
-      isJump: true,
-      jumpRow: mid.row,
-      jumpCol: mid.col,
-      row: land.row,
-      col: land.col
-    });
-
-    // 3) 递归：从落点继续找后续跳
-    checkersGetJumps(land.row, land.col, piece, moves, visited);
   }
 }
 
@@ -289,103 +249,140 @@ function checkersSelectPiece(x, y) {
   var pos = userToBoard(x, y);
   var piece = state.board[pos.row][pos.col];
   if (piece === 0) return;
+
   if (piece !== state.currentPlayer) return;
 
   state.selectedPiece = { x: x, y: y, row: pos.row, col: pos.col };
   state.validMoves = checkersGetValidMoves(x, y);
-
-  console.log('[选棋] (' + pos.row + ',' + pos.col + ') player=' + piece + ' moves=' + state.validMoves.length);
-  for (var i = 0; i < state.validMoves.length; i++) {
-    var m = state.validMoves[i];
-    console.log('  move' + i + ': x=' + m.x + ' y=' + m.y + ' row=' + m.row + ' col=' + m.col + ' jump=' + m.isJump);
-  }
 }
 
 // 移动棋子
 function checkersMovePiece(x, y) {
   if (!state.selectedPiece) return false;
 
+  var isValid = false;
   var moveData = null;
   for (var i = 0; i < state.validMoves.length; i++) {
     if (state.validMoves[i].x === x && state.validMoves[i].y === y) {
+      isValid = true;
       moveData = state.validMoves[i];
       break;
     }
   }
-  if (!moveData) {
-    console.log('[移动失败] 没找到匹配，clicked=(' + x + ',' + y + ')');
-    for (var i = 0; i < state.validMoves.length; i++) {
-      var m = state.validMoves[i];
-      console.log('  valid' + i + ': x=' + m.x + ' y=' + m.y);
-    }
-    return false;
-  }
+
+  if (!isValid) return false;
 
   var sx = state.selectedPiece.row;
   var sy = state.selectedPiece.col;
   var piece = state.board[sx][sy];
-  var dx = moveData.row;
+  var dx = moveData.row;   // 目标内部坐标
   var dy = moveData.col;
 
-  console.log('[执行移动] (' + sx + ',' + sy + ') → (' + dx + ',' + dy + ') isJump=' + moveData.isJump);
-  if (moveData.isJump) {
-    console.log('[被跳棋子] (' + moveData.jumpRow + ',' + moveData.jumpCol + ')');
-  }
-
-  // 记录历史
+  // 记录移动
   state.moveHistory.push({
     from: { x: state.selectedPiece.x, y: state.selectedPiece.y, row: sx, col: sy },
-    to:   { x: x, y: y, row: dx, col: dy },
+    to: { x: x, y: y, row: dx, col: dy },
     piece: piece,
     isJump: moveData.isJump,
-    jumpRow: moveData.jumpRow,
-    jumpCol: moveData.jumpCol,
+    jumpX: moveData.jumpX,
+    jumpY: moveData.jumpY,
     player: state.currentPlayer
   });
 
-  // 执行棋盘操作
-  state.board[sx][sy] = 0;
+  // 执行移动（用内部坐标直接操作）
   if (moveData.isJump) {
-    state.board[moveData.jumpRow][moveData.jumpCol] = 0;
+    // 找中间点：遍历6个方向，检测哪个方向一跳到(dx,dy)
+    var dirsEven = [[0, 1], [0, -1], [1, 0], [1, -1], [-1, 0], [-1, -1]];
+    var dirsOdd = [[0, 1], [0, -1], [1, 1], [1, 0], [-1, 0], [-1, -1]];
+    for (var d = 0; d < 6; d++) {
+      var dirs1 = (sx % 2 === 0) ? dirsEven : dirsOdd;
+      var nx = sx + dirs1[d][0];
+      var ny = sy + dirs1[d][1];
+      var dirs2 = (nx % 2 === 0) ? dirsEven : dirsOdd;
+      var jx = nx + dirs2[d][0];
+      var jy = ny + dirs2[d][1];
+      if (jx === dx && jy === dy) {
+        state.board[sx][sy] = 0;
+        state.board[nx][ny] = 0;
+        state.board[dx][dy] = piece;
+        break;
+      }
+    }
+  } else {
+    state.board[sx][sy] = 0;
+    state.board[dx][dy] = piece;
   }
-  state.board[dx][dy] = piece;
 
   state.lastMove = {
     from: { x: state.selectedPiece.x, y: state.selectedPiece.y },
-    to:   { x: x, y: y }
+    to: { x: x, y: y }
   };
 
-  // 连续跳：检查落点是否还能继续跳
+  // 跳跃后检查连续跳：如果落点还有可跳的方向，必须继续跳（不能切换玩家）
   if (moveData.isJump) {
-    var chainMoves = [];
-    var visitedChain = {};
-    visitedChain[dx + ',' + dy] = true;  // 落点已访问
-    checkersGetJumps(dx, dy, piece, chainMoves, visitedChain);
-
-    if (chainMoves.length > 0) {
-      // 还有后续跳：选中移到落点，保持当前玩家
-      var sc2 = getRowStartCol(dx);
-      state.selectedPiece = { x: dx + 1, y: dy - sc2 + 1, row: dx, col: dy };
-      state.validMoves = chainMoves;
+    var moreJumps = checkersGetJumpsFrom(dx, dy, piece, {});
+    if (moreJumps.length > 0) {
+      // 把 {row,col} 转成 {x,y,row,col}（user坐标，x=row+1, y=col-startCol+1）
+      var dispMoves = [];
+      for (var m = 0; m < moreJumps.length; m++) {
+        var r = moreJumps[m].row;
+        var c = moreJumps[m].col;
+        dispMoves.push({
+          x: r + 1,
+          y: c - getRowStartCol(r) + 1,
+          row: r, col: c
+        });
+      }
+      // 还有后续跳：更新选中棋子位置，保持当前玩家，刷新可跳点
+      state.selectedPiece = { x: dx + 1, y: dy - getRowStartCol(dx) + 1, row: dx, col: dy };
+      state.validMoves = dispMoves;
       state.isMyTurn = true;
-      console.log('[连跳] 后续跳=' + chainMoves.length + '个');
     } else {
       // 跳链结束，切换玩家
       state.currentPlayer = state.currentPlayer % state.settings.checkersMode.players + 1;
+      state.isMyTurn = true;
       state.selectedPiece = null;
       state.validMoves = [];
-      state.isMyTurn = true;
-      console.log('[跳链结束] 切换玩家=' + state.currentPlayer);
     }
   } else {
-    // 普通走子，切换玩家
     state.currentPlayer = state.currentPlayer % state.settings.checkersMode.players + 1;
+    state.isMyTurn = true;
     state.selectedPiece = null;
     state.validMoves = [];
-    state.isMyTurn = true;
   }
 
   return true;
+}
+
+// 从指定位置检测可跳方向（返回所有可跳落点，含连续跳链）
+function checkersGetJumpsFrom(row, col, piece, visited) {
+  var dirsEven = [[0, 1], [0, -1], [1, 0], [1, -1], [-1, 0], [-1, -1]];
+  var dirsOdd = [[0, 1], [0, -1], [1, 1], [1, 0], [-1, 0], [-1, -1]];
+  var results = [];
+
+  for (var d = 0; d < 6; d++) {
+    var dirs1 = (row % 2 === 0) ? dirsEven : dirsOdd;
+    var nx = row + dirs1[d][0];
+    var ny = col + dirs1[d][1];
+    if (!isOnBoard(nx, ny)) continue;
+
+    var dirs2 = (nx % 2 === 0) ? dirsEven : dirsOdd;
+    var jx = nx + dirs2[d][0];
+    var jy = ny + dirs2[d][1];
+    if (!isOnBoard(jx, jy)) continue;
+
+    if (state.board[nx][ny] !== 0 && state.board[jx][jy] === 0) {
+      var key = jx + ',' + jy;
+      if (!visited[key]) {
+        visited[key] = true;
+        results.push({ row: jx, col: jy });
+        // 继续从落点递归找后续跳
+        var sub = checkersGetJumpsFrom(jx, jy, piece, visited);
+        for (var s = 0; s < sub.length; s++) results.push(sub[s]);
+      }
+    }
+  }
+  return results;
 }
 
 // AI落子
